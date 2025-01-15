@@ -23,6 +23,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Read version from gradle.properties
+        id: read_version
+        run: |
+          VERSION=$(grep "^version=" gradle.properties | cut -d'=' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected project version: $VERSION"
+
       # image repo must be lowercase and GitHub Actions makes this difficult
       # see: https://github.com/orgs/community/discussions/10553
       - name: Set image path (to lowercase)
@@ -49,6 +56,7 @@ jobs:
           images: |
             ${{ steps.lower-repo.outputs.imagePath }}
           tags: |
+            ${{ steps.read_version.outputs.version }}
             ${{ github.sha }}
           flavor: latest=true
 
@@ -73,6 +81,11 @@ jobs:
       - name: Git checkout
         uses: actions/checkout@v4
 
+      - name: Sync Helm chart version with Gradle version
+        run: |
+          sed -i "s/^version:.*/version: ${{ needs.build-and-push.outputs.version }}/" chart/Chart.yaml
+          echo "Updated chart version to: ${{ needs.build-and-push.outputs.version }}"
+
       - name: Azure login
         uses: Azure/login@v2
         with:
@@ -93,7 +106,7 @@ jobs:
           overrideFiles: ./chart/values.yaml
           overrides: |
             app.image.repository: ${{ needs.build-and-push.outputs.image-path }}
-            app.image.tag: ${{ github.sha }}
+            app.image.tag: ${{ needs.build-and-push.outputs.version }}
             app.env.jwtSecret: ${{ secrets.JWT_SECRET }}
             app.env.mongodbUri: ${{ secrets.MONGODB_URI }}
             mongo.volume.csi.volumeHandle: ${{ secrets.MONGO_CSI_VOLUMEHANDLE }}

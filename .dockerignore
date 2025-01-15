@@ -1,10 +1,12 @@
 # local builds & dev files; not needed in repo
+.git
 .run
 .env
 .idea
 *.iml
 build/
 target/
+.github/
 .private/
 
 # gradle caches
