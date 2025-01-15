@@ -1,6 +1,7 @@
 app:
   replicaCount: 1
   metadata:
+    appVersion: "" # replaced during CI/CD pipeline
     labels:
       app: litter-app
       sa: litter-app-sa
@@ -22,8 +23,8 @@ app:
       cpu: "500m"
       storage: "512Mi"
   env:
-    jwtSecret: ""  # replaced via secret
-    mongodbUri: "" # replaced via secret
+    jwtSecret: ""  # replaced via secret (stored in k8s cluster)
+    mongodbUri: "" # replaced via secret (stored in k8s cluster)
 
 mongo:
   replicaCount: 1
