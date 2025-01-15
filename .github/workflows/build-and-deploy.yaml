@@ -81,11 +81,6 @@ jobs:
       - name: Git checkout
         uses: actions/checkout@v4
 
-      - name: Sync Helm chart version with Gradle version
-        run: |
-          sed -i "s/^version:.*/version: ${{ needs.build-and-push.outputs.version }}/" chart/Chart.yaml
-          echo "Updated chart version to: ${{ needs.build-and-push.outputs.version }}"
-
       - name: Azure login
         uses: Azure/login@v2
         with:
