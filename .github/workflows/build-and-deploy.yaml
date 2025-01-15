@@ -14,7 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: "Actions Environment"
     outputs:
-      image-path: ${{ steps.lower-repo.outputs.imagePath }}
+      image_path: ${{ steps.image-path.outputs.image_path }}
+      app_version: ${{ steps.app-version.outputs.app_version }}
     permissions:
       contents: read
       packages: write
@@ -24,19 +25,23 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Read version from gradle.properties
-        id: read_version
+        id: app-version
         run: |
           VERSION=$(grep "^version=" gradle.properties | cut -d'=' -f2)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          if [ -z "$VERSION" ]; then
+            echo "Error: Version not found in gradle.properties"
+            exit 1
+          fi
+          echo "app_version=$VERSION" >> $GITHUB_OUTPUT
           echo "Detected project version: $VERSION"
 
       # image repo must be lowercase and GitHub Actions makes this difficult
       # see: https://github.com/orgs/community/discussions/10553
       - name: Set image path (to lowercase)
-        id: lower-repo
+        id: image-path
         run: |
-          imagePath="${REGISTRY,,}/${GITHUB_REPOSITORY,,}"
-          echo "imagePath=$imagePath" >> $GITHUB_OUTPUT
+          imagePath="${REGISTRY}/${GITHUB_REPOSITORY,,}"
+          echo "image_path=$imagePath" >> $GITHUB_OUTPUT
           echo "Image path: $imagePath"
 
       - name: Log into registry
@@ -54,9 +59,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ steps.lower-repo.outputs.imagePath }}
+            ${{ steps.image-path.outputs.image_path }}
           tags: |
-            ${{ steps.read_version.outputs.version }}
+            ${{ steps.app-version.outputs.app_version }}
             ${{ github.sha }}
           flavor: latest=true
 
@@ -100,8 +105,8 @@ jobs:
           helmChart: ./chart/
           overrideFiles: ./chart/values.yaml
           overrides: |
-            app.image.repository: ${{ needs.build-and-push.outputs.image-path }}
-            app.image.tag: ${{ needs.build-and-push.outputs.version }}
+            app.image.repository: ${{ needs.build-and-push.outputs.image_path }}
+            app.image.tag: ${{ needs.build-and-push.outputs.app_version }}
             app.env.jwtSecret: ${{ secrets.JWT_SECRET }}
             app.env.mongodbUri: ${{ secrets.MONGODB_URI }}
             mongo.volume.csi.volumeHandle: ${{ secrets.MONGO_CSI_VOLUMEHANDLE }}
