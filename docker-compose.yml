@@ -1,0 +1,35 @@
+#file: noinspection SpellCheckingInspection
+services:
+  litter-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8081:8080"
+      - "5005:5005"
+    environment:
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,address=*:5005,server=y,suspend=n
+    volumes:
+      - maven-repo:/root/.m2
+    depends_on:
+      - litter-db
+
+
+
+  litter-db:
+    image: mongo:7.0
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+volumes:
+  maven-repo:
+  mongodb_data:
+
+networks:
+  default:
+    name: litter-network
+    driver: bridge

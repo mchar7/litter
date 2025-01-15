@@ -1,0 +1,20 @@
+# local dev files; not needed in repo
+/target
+/.run
+/.idea
+/*.tgz
+*.iml
+/.env
+/.private
+
+# any scattered, no-longer-used files
+*.bak
+/src/bak*
+/old
+*.old
+
+# common .ignore patterns
+*.swp
+.DS_Store
+*.txt
+*.log

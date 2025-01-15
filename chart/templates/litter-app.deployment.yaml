@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: {{ .Values.app.metadata.labels.app }}
+  namespace: {{ .Release.Namespace | default "default" }}
+
+spec:
+  replicas: {{ .Values.app.replicaCount }}
+
+  selector:
+    matchLabels:
+      app: {{ .Values.app.metadata.labels.app }}
+      component: {{ .Values.app.metadata.labels.component }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.app.metadata.labels.app }}
+        component: {{ .Values.app.metadata.labels.component }}
+
+    spec:
+      serviceAccountName: {{ .Values.app.metadata.labels.sa }}
+      automountServiceAccountToken: false
+      containers:
+        - name: {{ .Values.app.metadata.labels.app }}
+          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.app.service.port }}
+          resources:
+            requests:
+              memory: {{ .Values.app.resources.requests.memory }}
+              cpu: {{ .Values.app.resources.requests.cpu }}
+              ephemeral-storage: {{ .Values.app.resources.requests.storage }}
+            limits:
+              memory: {{ .Values.app.resources.limits.memory }}
+              cpu: {{ .Values.app.resources.limits.cpu }}
+              ephemeral-storage: {{ .Values.app.resources.limits.storage }}
+          env:
+            - name: SPRING_DATA_MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: litter-secrets
+                  key: mongodb-uri
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: litter-secrets
+                  key: jwt-secret

@@ -1,0 +1,17 @@
+spring:
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI}
+
+jwt:
+  secret: ${JWT_SECRET}
+  issuer: litter
+  expiration-time: 3600000 # 1 hour in milliseconds
+
+server:
+  port: 8080
+
+litter:
+  security:
+    # needs 1 lowercase, 1 uppercase, 1 digit, 1 special character; min 8 characters, max 256
+    password-validation-regex: '(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,256}'
