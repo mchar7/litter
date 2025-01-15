@@ -29,8 +29,7 @@ jobs:
         run: |
           VERSION=$(grep "^version=" gradle.properties | cut -d'=' -f2)
           if [ -z "$VERSION" ]; then
-            echo "Error: Version not found in gradle.properties"
-            exit 1
+            echo "Error: Version not found in gradle.properties"; exit 1
           fi
           echo "app_version=$VERSION" >> $GITHUB_OUTPUT
           echo "Detected project version: $VERSION"
@@ -66,13 +65,15 @@ jobs:
           flavor: latest=true
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy-to-aks:
     needs: build-and-push
