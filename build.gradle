@@ -8,8 +8,8 @@ group = project.group
 version = project.version
 
 java {
-    sourceCompatibility = project.java_source_version
-    targetCompatibility = project.java_target_version
+    sourceCompatibility = project.java_version
+    targetCompatibility = project.java_version
 }
 
 repositories {
@@ -45,10 +45,29 @@ dependencies {
 
     // configuration processor
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+}
 
+configurations {
+    mockitoAgent
+}
+dependencies {
     // testing
+    testImplementation 'org.mockito:mockito-core'
+    testImplementation 'io.projectreactor:reactor-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.restdocs:spring-restdocs-webtestclient'
+
+    implementation 'org.springframework.boot:spring-boot-starter-data-mongodb-reactive'
+
+    mockitoAgent('org.mockito:mockito-core') {
+        transitive = false
+    }
+}
+tasks {
+    test {
+        useJUnitPlatform()
+        jvmArgs += "-javaagent:${configurations.mockitoAgent.asPath}"
+    }
 }
 
 springBoot {
