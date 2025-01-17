@@ -24,21 +24,18 @@ public class User {
      * Role name for administrators.
      */
     public static final String DB_USER_ROLE_ADMIN_NAME = "ROLE_ADMIN";
-
-    /**
-     * Role name for administrators.
-     */
-    public static final Integer ROLES_HASHMAP_DEFAULT_CAP = 4;
-
     /**
      * Role name for subscribers.
      */
     public static final String DB_USER_ROLE_SUBSCRIBER_NAME = "ROLE_SUBSCRIBER";
-
     /**
      * Role name for producers.
      */
     public static final String DB_USER_ROLE_PRODUCER_NAME = "ROLE_PRODUCER";
+    /**
+     * Default capacity for roles hashmap.
+     */
+    public static final Integer ROLES_HASHMAP_DEFAULT_CAP = 4;
 
     @Id
     @JsonSerialize(using = ToStringSerializer.class) // serialize ObjectId as a string in JSON

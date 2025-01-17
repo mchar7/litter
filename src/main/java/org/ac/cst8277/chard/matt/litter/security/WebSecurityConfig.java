@@ -10,6 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverterAdapter;
 import org.springframework.security.web.server.SecurityWebFilterChain;
@@ -59,6 +60,20 @@ class WebSecurityConfig {
         return exchange.getResponse().writeWith(
                 Mono.just(exchange.getResponse().bufferFactory().wrap(simpleErrMsg.getBytes(StandardCharsets.UTF_8)))
         );
+    }
+
+    /**
+     * Returns the Argon2PasswordEncoder as configured for Litter.
+     * <p>
+     * Use Spring Security's defaults for Argon2
+     * Can later make custom encoder options like "new Argon2PasswordEncoder(16, 32, 1, 4096, 8)"
+     *
+     * @return the Argon2PasswordEncoder
+     */
+    @Bean
+    private static Argon2PasswordEncoder instantiatePasswordEncoder() {
+        logger.info("Creating Argon2PasswordEncoder");
+        return Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8();
     }
 
     /**

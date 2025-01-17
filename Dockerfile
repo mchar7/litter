@@ -25,4 +25,4 @@ COPY --from=builder /app/build/libs/litter.jar /app/litter.jar
 EXPOSE 8080
 
 # run the app
-CMD ["java", "-jar", "litter.jar"]
+CMD ["java", "-jar", "/app/litter.jar"]

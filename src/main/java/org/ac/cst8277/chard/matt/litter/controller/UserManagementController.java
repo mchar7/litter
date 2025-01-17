@@ -89,6 +89,10 @@ public class UserManagementController {
                     logger.warn("Failed login attempt for username: {}", username);
                     return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials"));
                 })
+                .onErrorResume(IllegalArgumentException.class, e -> {
+                    logger.warn("Invalid input during login: {}", e.getMessage());
+                    return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage()));
+                })
                 .onErrorResume(e -> {
                     logger.error("Error during user login: {}", e.getMessage());
                     return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred"));

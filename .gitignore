@@ -13,7 +13,6 @@ target/
 # common .ignore patterns
 .DS_Store
 *.swp
-*.txt
 *.log
 *.bak
 *.old

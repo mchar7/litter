@@ -3,11 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: builder # only use cache for the build stage
-      args:
-        GRADLE_USER_HOME: /home/gradle/.gradle
     env_file:
-      - ./.private/env
+      - ./.private/.env
     ports:
       - "8080:8080"
       - "5005:5005"
@@ -16,13 +13,11 @@ services:
       - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,address=*:5005,server=y,suspend=n
     depends_on:
       - litter-db
-    volumes:
-      - ~/.gradle:/home/gradle/.gradle # mount local Gradle cache
 
   litter-db:
     image: mongo:8.0
     ports:
-      - "27018:27017"
+      - "27017:27017"
     volumes:
       - mongodb_data:/data/db
 
