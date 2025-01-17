@@ -71,7 +71,7 @@ class WebSecurityConfig {
      * @return the Argon2PasswordEncoder
      */
     @Bean
-    protected Argon2PasswordEncoder create() {
+    private static Argon2PasswordEncoder instantiatePasswordEncoder() {
         logger.info("Creating Argon2PasswordEncoder");
         return Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8();
     }
