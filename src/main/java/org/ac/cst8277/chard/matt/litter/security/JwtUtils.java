@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwtEncodingException;
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
@@ -87,8 +88,14 @@ public class JwtUtils {
      *
      * @param user User for whom to generate the token
      * @return String representation of the JWT token
+     * @throws JwtEncodingException if the user's username is null
      */
     public String generateToken(User user) {
+        if (null == user.getUsername()) {
+            logger.error("Cannot generate token: Username is null");
+            throw new JwtEncodingException("Cannot generate token for a user with a null username.");
+        }
+
         logger.info("Generating JWT token for user: {}", user.getUsername());
         Map<String, Object> claims = HashMap.newHashMap(ROLES_HASHMAP_DEFAULT_CAP);
         claims.put(ROLES_CLAIM, user.getRoles());
