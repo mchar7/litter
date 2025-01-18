@@ -41,6 +41,11 @@ public class SubscriptionService {
      * @return Mono of the created Subscription
      */
     public Mono<Subscription> subscribe(JwtClaimAccessor jwt, String producerUsername) {
+        // Validate producerUsername
+        if (null == producerUsername || producerUsername.isBlank()) {
+            return Mono.error(new IllegalArgumentException("Producer username must not be null or empty."));
+        }
+
         Mono<User> subscriberMono = userManagementService.getUserByJwt(jwt);
         Mono<User> producerMono = userManagementService.getUserByUsername(producerUsername);
 

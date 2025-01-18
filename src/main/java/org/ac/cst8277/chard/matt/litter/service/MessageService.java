@@ -51,6 +51,11 @@ public class MessageService {
      * @return Mono of the created message
      */
     public Mono<Message> createMessage(JwtClaimAccessor jwt, String content) {
+        if (null == content || content.isEmpty()) {
+            logger.warn("User attempted to create a message with empty content");
+            return Mono.error(new IllegalArgumentException("Message content cannot be empty."));
+        }
+
         return userManagementService.getUserByJwt(jwt)
                 .flatMap(user -> {
                     if (!user.getRoles().contains(User.DB_USER_ROLE_PRODUCER_NAME)) {
@@ -82,8 +87,8 @@ public class MessageService {
                 .flatMap(user -> messageRepository.findById(id)
                         .switchIfEmpty(Mono.error(new IllegalArgumentException("Message not found.")))
                         .flatMap(message -> {
-                            // check if the user is the producer of the message or is an admin
-                            if (!message.getProducerId().equals(user.getId()) ||
+                            // check if the user is the producer of the message OR is an admin
+                            if (!message.getProducerId().equals(user.getId()) &&
                                     !user.getRoles().contains(User.DB_USER_ROLE_ADMIN_NAME)) {
                                 return Mono.error(
                                         new IllegalArgumentException("User is not authorized to delete this message."));
