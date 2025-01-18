@@ -101,8 +101,8 @@ class UserManagementServiceTest {
     /**
      * Tests registering a new user with valid credentials.
      * <p>
-     * Expected: The user is successfully registered with the correct username, hashed password,
-     * subscriber role, and a generated unique ID.
+     * Tests on: register(String username, String password)
+     * Expected: Successfully returns the new user.
      */
     @Test
     void testRegisterNewUser_Success() {
@@ -114,6 +114,7 @@ class UserManagementServiceTest {
 
         String expectedHash = String.format("mocked_hash_for_%s", TEST_PASSWORD_VALID);
 
+        // repository should save the user
         Mockito.when(userRepository.save(ArgumentMatchers.any(User.class)))
                 .thenAnswer(invocation -> {
                     User user = invocation.getArgument(0);
@@ -121,7 +122,7 @@ class UserManagementServiceTest {
                     return Mono.just(user);
                 });
 
-        // act and assert
+        // expect a new user to be created
         StepVerifier.create(userManagementService.register(TEST_USERNAME_VALID, TEST_PASSWORD_VALID))
                 .assertNext(user -> {
                     assertNotNull(user.getId(), "User ID should not be null");
@@ -144,7 +145,8 @@ class UserManagementServiceTest {
     /**
      * Tests registering a user with an existing username.
      * <p>
-     * Expected: Error "User already exists".
+     * Tests on: register(String username, String password)
+     * Expected: IllegalArgumentException
      */
     @Test
     void testRegisterExistingUser_ThrowsError() {
@@ -158,7 +160,7 @@ class UserManagementServiceTest {
         // repository returns a user matching the given username
         Mockito.when(userRepository.findByUsername(TEST_USERNAME_VALID)).thenReturn(Mono.just(existingUser));
 
-        // act and assert
+        // expect an error for existing user
         StepVerifier.create(userManagementService.register(TEST_USERNAME_VALID, TEST_PASSWORD_VALID))
                 .expectErrorMatches(throwable ->
                         throwable instanceof IllegalArgumentException &&
@@ -175,7 +177,8 @@ class UserManagementServiceTest {
     /**
      * Tests registering a user with invalid usernames.
      * <p>
-     * Expected: Error about username requirements for each invalid username.
+     * Tests on: register(String username, String password)
+     * Expected: IllegalArgumentException
      */
     @Test
     void testRegisterInvalidUsername_ThrowsError() {
@@ -195,7 +198,7 @@ class UserManagementServiceTest {
             // repository returns no existing user
             Mockito.when(userRepository.findByUsername(username)).thenReturn(Mono.empty());
 
-            // userManagementService.register(...) should error
+            // expect an error for invalid username
             StepVerifier.create(userManagementService.register(username, TEST_PASSWORD_VALID))
                     .expectErrorMatches(throwable -> throwable instanceof IllegalArgumentException &&
                             throwable.getMessage().contains(USERNAME_INVALID_MESSAGE))
@@ -211,7 +214,8 @@ class UserManagementServiceTest {
     /**
      * Tests registering a user with insecure passwords.
      * <p>
-     * Expected: Error about password requirements for each invalid password.
+     * Tests on: register(String username, String password)
+     * Expected: IllegalArgumentException
      */
     @Test
     void testRegisterInvalidPassword_ThrowsError() {
@@ -232,7 +236,7 @@ class UserManagementServiceTest {
             // repository returns no existing user
             Mockito.when(userRepository.findByUsername(TEST_USERNAME_VALID)).thenReturn(Mono.empty());
 
-            // userManagementService.register(...) should error
+            // expect an error for insecure password
             StepVerifier.create(userManagementService.register(TEST_USERNAME_VALID, password))
                     .expectErrorMatches(throwable -> throwable instanceof IllegalArgumentException &&
                             throwable.getMessage().contains(PASSWORD_INSECURE_MESSAGE))
@@ -248,7 +252,8 @@ class UserManagementServiceTest {
     /**
      * Tests registering a user with invalid usernames.
      * <p>
-     * Expected: Error about username requirements for each invalid username.
+     * Tests on: register(String username, String password)
+     * Expected: IllegalArgumentException
      */
     @Test
     void testLoginInvalidUsername_ThrowsError() {
@@ -278,7 +283,8 @@ class UserManagementServiceTest {
     /**
      * Tests registering a user with insecure passwords.
      * <p>
-     * Expected: Error about password requirements for each invalid password.
+     * Tests on: register(String username, String password)
+     * Expected: IllegalArgumentException
      */
     @Test
     void testLoginInvalidPassword_ThrowsError() {
@@ -312,7 +318,8 @@ class UserManagementServiceTest {
     /**
      * Tests logging in with valid credentials.
      * <p>
-     * Expected: JWT token is returned.
+     * Tests on: login(String username, String password)
+     * Expected: Successfully returns a JWT token
      */
     @Test
     void testLoginCorrectCredentials_ReturnsActualToken() {
@@ -323,38 +330,23 @@ class UserManagementServiceTest {
         validUser.setUsername(TEST_USERNAME_VALID);
         validUser.setId(ObjectId.get());
         validUser.setRoles(List.of(User.DB_USER_ROLE_SUBSCRIBER_NAME));
-
-        // Create a mock password encoder instead of using the spy
-        PasswordEncoder mockPasswordEncoder = Mockito.mock(PasswordEncoder.class);
-        userManagementService = new UserManagementService(userRepository, jwtUtils, mockPasswordEncoder);
-
-        // Set a simple test hash and mock the encoder behavior
-        String validPasswordHash = "hashedPassword123";
-        validUser.setPasswordHash(validPasswordHash);
-
-        // mock repository to return our test user
+        validUser.setPasswordHash(TEST_PASSWORD_VALID);
         Mockito.when(userRepository.findByUsername(TEST_USERNAME_VALID))
                 .thenReturn(Mono.just(validUser));
 
-        // mock password encoder to validate password - this is crucial
-        Mockito.when(mockPasswordEncoder.matches(TEST_PASSWORD_VALID, validPasswordHash))
-                .thenReturn(true);
+        // mock password encoder to validate password
+        Mockito.when(passwordEncoder.matches(TEST_PASSWORD_VALID, validUser.getPasswordHash())).thenReturn(true);
 
-        // expected token value
-        String expectedToken = "valid.jwt.token";
+        Mockito.when(jwtUtils.generateToken(ArgumentMatchers.any(User.class))).thenReturn(validUser.getPasswordHash());
 
-        // mock JWT generation
-        Mockito.when(jwtUtils.generateToken(ArgumentMatchers.any(User.class)))
-                .thenReturn(expectedToken);
-
-        // test the login
+        // test the login, expect a token
         StepVerifier.create(userManagementService.login(TEST_USERNAME_VALID, TEST_PASSWORD_VALID))
-                .expectNext(expectedToken)
+                .expectNext(validUser.getPasswordHash())
                 .verifyComplete();
 
         // verify our mocks were called correctly
         Mockito.verify(userRepository).findByUsername(TEST_USERNAME_VALID);
-        Mockito.verify(mockPasswordEncoder).matches(TEST_PASSWORD_VALID, validPasswordHash);
+        Mockito.verify(passwordEncoder).matches(TEST_PASSWORD_VALID, validUser.getPasswordHash());
         Mockito.verify(jwtUtils).generateToken(validUser);
 
         logger.info("Login test with valid credentials completed successfully");
@@ -363,7 +355,8 @@ class UserManagementServiceTest {
     /**
      * Tests logging in with incorrect password for an existing user.
      * <p>
-     * Expected: Throws BadCredentialsException.
+     * Tests on: login(String username, String password)
+     * Expected: BadCredentialsException
      */
     @Test
     void testLoginRealUserWrongPassword_ThrowsBadCredentials() {
@@ -395,7 +388,8 @@ class UserManagementServiceTest {
     /**
      * Tests logging in with a non-existent user.
      * <p>
-     * Expected: Throws BadCredentialsException.
+     * Tests on: login(String username, String password)
+     * Expected: BadCredentialsException.
      */
     @Test
     void testLoginNonExistentUser_ThrowsBadCredentials() {
@@ -411,20 +405,20 @@ class UserManagementServiceTest {
                                 throwable.getMessage().contains(USER_NOT_FOUND_MESSAGE))
                 .verify();
 
-        logger.info("Test for non-existent user login completed.");
-
         // verify single repository call
         Mockito.verify(userRepository).findByUsername(TEST_USERNAME_VALID);
+        logger.info("Test for non-existent user login completed.");
     }
 
     /**
      * Tests retrieving a user by JWT with a valid user subject.
      * <p>
-     * Expected: Returns the corresponding user object.
+     * Tests on: getUserByJwt(JwtClaimAccessor jwt)
+     * Expected: Successfully returns the user
      */
     @Test
     void testGetUserByJwt_ValidUser_ReturnsUser() {
-        String subject = "validUser";
+        String subject = TEST_USERNAME_VALID;
         logger.info("Testing getUserByJwt with valid user subject: {}", subject);
 
         // mock user found
@@ -446,7 +440,8 @@ class UserManagementServiceTest {
     /**
      * Tests retrieving a user by JWT with a non-existent user subject.
      * <p>
-     * Expected: Throws an error for user not found.
+     * Tests on: getUserByJwt(JwtClaimAccessor jwt)
+     * Expected: IllegalArgumentException
      */
     @Test
     void testGetUserByJwt_NonExistentUser_ThrowsError() {
@@ -471,7 +466,8 @@ class UserManagementServiceTest {
     /**
      * Tests retrieving a user by username when the user exists.
      * <p>
-     * Expected: Returns the user if found.
+     * Tests on: getUserByUsername(String username)
+     * Expected: Successfully returns the user
      */
     @Test
     void testGetUserByUsername_FoundUser_ReturnsUser() {
@@ -494,7 +490,8 @@ class UserManagementServiceTest {
     /**
      * Tests retrieving a user by username who does not exist.
      * <p>
-     * Expected: Throws an IllegalArgumentException indicating user not found.
+     * Tests on: getUserByUsername(String username)
+     * Expected: IllegalArgumentException
      */
     @Test
     void testGetUserByUsername_NotFoundUser_ThrowsError() {
@@ -518,7 +515,8 @@ class UserManagementServiceTest {
     /**
      * Tests retrieving all users by a specified role.
      * <p>
-     * Expected: Returns all users with the specified role.
+     * Tests on: getAllUsersByRole(String role)
+     * Expected: Successfully returns all users with the specified role.
      */
     @Test
     void testGetAllUsersByRole_ReturnsUsers() {
@@ -547,7 +545,7 @@ class UserManagementServiceTest {
                 .expectNext(user2)
                 .verifyComplete();
 
-        // Verify that the repository was queried once
+        // verify that the repository was queried once
         Mockito.verify(userRepository, Mockito.times(1)).findAll();
         logger.info("Test for getAllUsersByRole completed.");
     }
@@ -555,7 +553,8 @@ class UserManagementServiceTest {
     /**
      * Tests retrieving all users.
      * <p>
-     * Expected: Returns a flux of all user documents.
+     * Tests on: getAllUsers()
+     * Expected: Successfully returns a flux of all user documents.
      */
     @Test
     void testGetAllUsers_ReturnsAllUsers() {
@@ -588,7 +587,6 @@ class UserManagementServiceTest {
                     assertTrue(map.containsValue(userB.getRoles()), "Should contain user B roles");
                 })
                 .verifyComplete();
-
         logger.info("Test for getAllUsers completed.");
     }
 }
