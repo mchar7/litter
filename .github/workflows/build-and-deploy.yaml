@@ -107,7 +107,7 @@ jobs:
           overrideFiles: ./chart/values.yaml
           overrides: |
             app.image.repository: ${{ needs.build-and-push.outputs.image_path }}
-            app.image.tag: ${{ needs.build-and-push.outputs.app_version }}
+            app.image.tag: ${{ github.sha }}
             app.env.jwtSecret: ${{ secrets.JWT_SECRET }}
             app.env.mongodbUri: ${{ secrets.MONGODB_URI }}
             mongo.volume.csi.volumeHandle: ${{ secrets.MONGO_CSI_VOLUMEHANDLE }}
