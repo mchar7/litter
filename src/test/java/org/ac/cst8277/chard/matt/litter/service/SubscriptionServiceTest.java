@@ -44,7 +44,7 @@ class SubscriptionServiceTest {
     private static final String USER_ALREADY_SUBSCRIBED_MESSAGE = "User is already subscribed.";
     private static final String NO_SUBSCRIPTION_FOUND_MESSAGE = "No subscription found for the given users.";
     private static final String USER_NOT_SUBSCRIBER_MESSAGE = "User is not a subscriber.";
-    private static final String PRODUCER_USERNAME_EMPTY_MESSAGE = "Producer username cannot be empty.";
+    private static final String PRODUCER_USERNAME_EMPTY_MESSAGE = "Producer username must not be null or empty.";
 
     @Mock
     private SubscriptionRepository subscriptionRepository;
