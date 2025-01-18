@@ -3,7 +3,6 @@ package org.ac.cst8277.chard.matt.litter.repository;
 import org.ac.cst8277.chard.matt.litter.model.Subscription;
 import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
-import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -32,13 +31,4 @@ public interface SubscriptionRepository extends ReactiveMongoRepository<Subscrip
      * @return Mono of the subscription found
      */
     Mono<Subscription> findBySubscriberIdAndProducerId(ObjectId subscriberId, ObjectId producerId);
-
-    /**
-     * Method for deleting a subscription.
-     *
-     * @param subscription Subscription to be deleted
-     * @return Mono of Void
-     */
-    @NonNull
-    Mono<Void> delete(@NonNull Subscription subscription);
 }
