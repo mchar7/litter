@@ -6,6 +6,7 @@
 build/
 target/
 .private/
+.secrets
 
 # gradle caches
 .gradle/
@@ -16,4 +17,3 @@ target/
 *.log
 *.bak
 *.old
-/.secrets
