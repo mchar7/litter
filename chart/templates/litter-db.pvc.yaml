@@ -1,3 +1,5 @@
+# only create the PV if the volume is not managed externally
+{{- if not .Values.mongo.volume.external }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 
@@ -14,3 +16,4 @@ spec:
   resources:
     requests:
       storage: {{ .Values.mongo.volume.size }}
+{{- end }}

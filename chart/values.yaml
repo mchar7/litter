@@ -1,4 +1,8 @@
+secrets:
+  name: litter-secrets # name of the secret containing keys like JWT_SECRET and MONGODB_URI
+
 app:
+  imagePullSecrets: [ { name: "container-registry-secret" } ]
   replicaCount: 1
   metadata:
     appVersion: "" # replaced during CI/CD pipeline
@@ -23,8 +27,16 @@ app:
       cpu: "500m"
       storage: "512Mi"
   env:
-    jwtSecret: ""  # replaced via secret (stored in k8s cluster)
-    mongodbUri: "" # replaced via secret (stored in k8s cluster)
+    - name: MONGODB_URI # replaced via secret (stored in k8s cluster)
+      valueFrom:
+        secretKeyRef:
+          name: { { secrets.name } }
+          key: mongodb-uri
+    - name: JWT_SECRET # replaced via secret (stored in k8s cluster)
+      valueFrom:
+        secretKeyRef:
+          name: { { secrets.name } }
+          key: jwt-secret
 
 mongo:
   replicaCount: 1
@@ -37,6 +49,7 @@ mongo:
     repository: mongo
     tag: "8.0"
   volume:
+    external: true # is the volume is managed externally? PV/PVC not created if true
     size: 4Gi
     fsType: ext4
     mountPath: /data/db
@@ -47,7 +60,7 @@ mongo:
       name: litter-db-pvc
     csi:
       driver: disk.csi.azure.com
-      volumeHandle: "" # replaced via secret
+      volumeHandle: "" # replaced via secret lookup in PV template
     storageClassName: managed-csi
   resources:
     requests:

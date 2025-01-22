@@ -3,7 +3,7 @@ kind: Deployment
 
 metadata:
   name: {{ .Values.app.metadata.labels.app }}
-  namespace: {{ .Release.Namespace | default "default" }}
+  namespace: {{ .Release.Namespace }}
 
 spec:
   replicas: {{ .Values.app.replicaCount }}
@@ -20,11 +20,12 @@ spec:
         component: {{ .Values.app.metadata.labels.component }}
 
     spec:
+      imagePullSecrets: {{ .Values.app.imagePullSecrets | toYaml | nindent 12 }}
       serviceAccountName: {{ .Values.app.metadata.labels.sa }}
       automountServiceAccountToken: false
       containers:
         - name: {{ .Values.app.metadata.labels.app }}
-          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+          image: {{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.app.service.port }}
@@ -37,14 +38,4 @@ spec:
               memory: {{ .Values.app.resources.limits.memory }}
               cpu: {{ .Values.app.resources.limits.cpu }}
               ephemeral-storage: {{ .Values.app.resources.limits.storage }}
-          env:
-            - name: SPRING_DATA_MONGODB_URI
-              valueFrom:
-                secretKeyRef:
-                  name: litter-secrets
-                  key: mongodb-uri
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: litter-secrets
-                  key: jwt-secret
+          env: {{ .Values.app.env | toYaml | nindent 12 }}
