@@ -1,7 +1,7 @@
 spring:
   data:
     mongodb:
-      uri: ${SPRING_DATA_MONGODB_URI}
+      uri: ${MONGODB_URI}
 
 jwt:
   secret: ${JWT_SECRET}
