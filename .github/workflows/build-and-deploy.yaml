@@ -53,7 +53,6 @@ jobs:
       packages: write
     outputs:
       image_path: ${{ steps.image-path.outputs.image_path }}
-      app_version: ${{ steps.app-version.outputs.app_version }}
     timeout-minutes: 5
 
     steps:
@@ -146,7 +145,7 @@ jobs:
           helmChart: ./chart/
           overrideFiles: ./chart/values.yaml
           overrides: |
-            app.image.repository: ${{ steps.image-path.outputs.image_path }}
+            app.image.repository: ${{ needs.image-path.outputs.image_path }}
             app.image.tag: ${{ github.sha }}
         id: bake
 
