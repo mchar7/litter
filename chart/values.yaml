@@ -30,12 +30,12 @@ app:
     - name: MONGODB_URI # replaced via secret (stored in k8s cluster)
       valueFrom:
         secretKeyRef:
-          name: { { secrets.name } }
+          name: litter-secrets
           key: mongodb-uri
     - name: JWT_SECRET # replaced via secret (stored in k8s cluster)
       valueFrom:
         secretKeyRef:
-          name: { { secrets.name } }
+          name: litter-secrets
           key: jwt-secret
 
 mongo:
