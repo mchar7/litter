@@ -3,14 +3,24 @@ name: Build and Deploy
 env:
   AZURE_AKS_CLUSTER_NAME: litter-k8s-cluster
   AZURE_AKS_RESOURCE_GROUP: litter-k8s
-  K8S_NAMESPACE: litter
   REGISTRY: ghcr.io
 
 on:
   pull_request:
     branches:
       - main
-  workflow_dispatch: { }
+      - staging
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy to (prod, staging, dev)"
+        required: false
+        default: "dev"
+        type: string
+        options:
+          - "dev"
+          - "staging"
+          - "prod"
 
 jobs:
   build-with-gradle:
@@ -111,7 +121,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  deploy-to-aks_staging:
+  deploy-to-azure:
     runs-on: ubuntu-latest
     environment: "Actions Environment"
     needs:
@@ -125,6 +135,30 @@ jobs:
       # checkout code for Helm chart
       - name: Git checkout
         uses: actions/checkout@v4
+
+      # determine the deployment environment based on the trigger
+      # if workflow is triggered by a pull request:
+      #   ... and the base branch is 'main': staging
+      #   ... otherwise: dev
+      # if workflow is triggered by manual dispatch:
+      #   ... use the environment input
+      # the environment determines the Helm values file and the release name to use
+      - name: Determine environment
+        run: |
+          environment="${{ github.event.inputs.environment || 'dev' }}"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            if [[ "${{ github.event.pull_request.base.ref }}" == "main" ]]; then
+              environment="staging"
+            else
+              environment="dev"
+            fi
+          fi
+          
+          # export variables for later steps
+          echo "ENVIRONMENT=$environment" >> $GITHUB_ENV
+          echo "VALUES_FILE=values.${environment}.yaml" >> $GITHUB_ENV
+          echo "RELEASE_NAME=litter-${environment}" >> $GITHUB_ENV
+          echo "NAMESPACE=litter-${environment}" >> $GITHUB_ENV
 
       - name: Azure login
         uses: Azure/login@v2
@@ -142,9 +176,10 @@ jobs:
         id: bake
         with:
           renderEngine: helm
-          namespace: ${{ env.K8S_NAMESPACE }}
+          namespace: ${{ env.NAMESPACE }}
+          releaseName: ${{ env.RELEASE_NAME }}
           helmChart: ./chart/
-          overrideFiles: ./chart/values.yaml
+          overrideFiles: ./chart/${{ env.VALUES_FILE }}
           overrides: |
             app.image.repository: ${{ needs.image-and-push.outputs.image_path }}
             app.image.tag: ${{ github.sha }}
@@ -158,6 +193,6 @@ jobs:
         uses: Azure/k8s-deploy@v5
         with:
           action: deploy
-          namespace: ${{ env.K8S_NAMESPACE }}
+          namespace: ${{ env.NAMESPACE }}
           manifests: ${{ steps.bake.outputs.manifestsBundle }}
           imagepullsecrets: container-registry-secret
