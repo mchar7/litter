@@ -4,5 +4,3 @@ app:
 
 mongo:
   replicaCount: 1
-  volume:
-    external: false

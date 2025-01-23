@@ -1,19 +1,16 @@
-secrets:
-  name: litter-secrets # name of the secret containing keys like JWT_SECRET and MONGODB_URI
-
 app:
   imagePullSecrets: [ { name: "container-registry-secret" } ]
-  replicaCount: 1
+  replicaCount: 2
   metadata:
-    appVersion: "" # replaced during CI/CD pipeline
+    appVersion: ""  # replaced during CI/CD pipeline
     labels:
       app: litter-app
       sa: litter-app-sa
       component: app
     friendlyAppName: "Litter"
   image:
-    tag: "" # replaced during CI/CD pipeline
-    repository: "" # replaced during CI/CD pipeline
+    tag: ""  # replaced during CI/CD pipeline
+    repository: ""  # replaced during CI/CD pipeline
     pullPolicy: Always
   service:
     port: 8080
@@ -27,12 +24,12 @@ app:
       cpu: "500m"
       storage: "512Mi"
   env:
-    - name: MONGODB_URI # replaced via secret (stored in k8s cluster)
+    - name: MONGODB_URI  # replaced via k8s secret
       valueFrom:
         secretKeyRef:
           name: litter-secrets
           key: mongo-uri
-    - name: JWT_SECRET # replaced via secret (stored in k8s cluster)
+    - name: JWT_SECRET  # replaced via k8s secret
       valueFrom:
         secretKeyRef:
           name: litter-secrets
@@ -49,19 +46,10 @@ mongo:
     repository: mongo
     tag: "8.0"
   volume:
-    external: true # is the volume is managed externally? PV/PVC not created if true
-    size: 4Gi
-    fsType: ext4
-    mountPath: /data/db
-    mountName: mongo-data
     pv:
       name: litter-db-pv
     pvc:
       name: litter-db-pvc
-    csi:
-      driver: disk.csi.azure.com
-      volumeHandle: "" # replaced during CI/CD pipeline
-    storageClassName: managed-csi
   resources:
     requests:
       memory: "512Mi"
