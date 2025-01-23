@@ -68,6 +68,6 @@ mongo:
       cpu: "100m"
       storage: "256Mi"
     limits:
-      memory: "4Gi"
+      memory: "512Mi"
       cpu: "500m"
-      storage: "2Gi"
+      storage: "1Gi"

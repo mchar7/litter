@@ -119,6 +119,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy-to-azure:
     runs-on: ubuntu-latest
@@ -143,21 +145,23 @@ jobs:
       #   ... use the environment input
       # the environment determines the Helm values file and the release name to use
       - name: Determine environment
+        id: determine-env
         run: |
-          environment="${{ github.event.inputs.environment || 'dev' }}"
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             if [[ "${{ github.event.pull_request.base.ref }}" == "main" ]]; then
-              environment="staging"
-            else
-              environment="dev"
+              environment="staging" else environment="dev"
             fi
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            environment="${{ github.event.inputs.environment }}"
+          else
+            echo "Error: Unsupported event '${{ github.event_name }}'."
+            exit 1
           fi
           
-          # export variables for later steps
-          echo "ENVIRONMENT=$environment" >> $GITHUB_ENV
-          echo "VALUES_FILE=values.${environment}.yaml" >> $GITHUB_ENV
-          echo "RELEASE_NAME=litter-${environment}" >> $GITHUB_ENV
-          echo "NAMESPACE=litter-${environment}" >> $GITHUB_ENV
+          echo "environment=$environment" >> $GITHUB_OUTPUT
+          echo "values_file=values.${environment}.yaml" >> $GITHUB_OUTPUT
+          echo "release_name=litter-${environment}" >> $GITHUB_OUTPUT
+          echo "namespace=litter-${environment}" >> $GITHUB_OUTPUT
 
       - name: Azure login
         uses: Azure/login@v2
@@ -170,15 +174,26 @@ jobs:
           cluster-name: ${{ env.AZURE_AKS_CLUSTER_NAME }}
           resource-group: ${{ env.AZURE_AKS_RESOURCE_GROUP }}
 
+      # merge values.yaml and the environment-specific values file
+      - name: Merge Helm values with yq
+        id: merge-values
+        uses: mikefarah/yq@master
+        with:
+          cmd: |
+            eval-all 'select(fileIndex == 0) * select(fileIndex == 1)'
+            chart/values.common.yaml chart/${{ steps.determine-env.outputs.values_file }}
+            > chart/merged.values.yaml
+
+      # generate manifests using the merged values file
       - name: Generate manifests with Helm
         uses: Azure/k8s-bake@v3
         id: bake
         with:
           renderEngine: helm
-          namespace: ${{ env.NAMESPACE }}
-          releaseName: ${{ env.RELEASE_NAME }}
+          namespace: ${{ steps.determine-env.outputs.namespace }}
+          releaseName: ${{ steps.determine-env.outputs.release_name }}
           helmChart: ./chart/
-          overrideFiles: ./chart/${{ env.VALUES_FILE }}
+          overrideFiles: ./chart/merged.values.yaml
           overrides: |
             app.image.repository: ${{ needs.image-and-push.outputs.image_path }}
             app.image.tag: ${{ github.sha }}
@@ -192,6 +207,6 @@ jobs:
         uses: Azure/k8s-deploy@v5
         with:
           action: deploy
-          namespace: ${{ env.NAMESPACE }}
+          namespace: ${{ steps.determine-env.outputs.namespace }}
           manifests: ${{ steps.bake.outputs.manifestsBundle }}
           imagepullsecrets: container-registry-secret

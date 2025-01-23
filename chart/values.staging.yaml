@@ -1,0 +1,10 @@
+# overrides for staging environment
+app:
+  replicaCount: 2
+mongo:
+  replicaCount: 1
+  volume:
+    external: true
+ingress:
+  host: litter-app-staging.eastus.cloudapp.azure.com
+  tlsSecret: litter-app-staging-tls

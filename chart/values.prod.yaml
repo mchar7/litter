@@ -1,0 +1,28 @@
+# overrides for prod environment
+app:
+  replicaCount: 3
+  resources:
+    requests:
+      memory: "512Mi" # double base resources for prod
+      cpu: "200m"
+      storage: "512Mi"
+    limits:
+      memory: "1Gi"
+      cpu: "1"
+      storage: "1Gi"
+mongo:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "1Gi" # double base resources for prod
+      cpu: "200m"
+      storage: "512Mi"
+    limits:
+      memory: "1Gi"
+      cpu: "1"
+      storage: "2Gi"
+  volume:
+    external: false
+ingress:
+  host: litter-app-prod.eastus.cloudapp.azure.com
+  tlsSecret: litter-app-prod-tls

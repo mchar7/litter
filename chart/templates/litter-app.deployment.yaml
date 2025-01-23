@@ -1,24 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
-
 metadata:
   name: {{ .Values.app.metadata.labels.app }}
   namespace: {{ .Release.Namespace }}
-
 spec:
   replicas: {{ .Values.app.replicaCount }}
-
   selector:
     matchLabels:
       app: {{ .Values.app.metadata.labels.app }}
       component: {{ .Values.app.metadata.labels.component }}
-
   template:
     metadata:
       labels:
         app: {{ .Values.app.metadata.labels.app }}
         component: {{ .Values.app.metadata.labels.component }}
-
     spec:
       imagePullSecrets: {{ .Values.app.imagePullSecrets | toYaml | nindent 12 }}
       serviceAccountName: {{ .Values.app.metadata.labels.sa }}
