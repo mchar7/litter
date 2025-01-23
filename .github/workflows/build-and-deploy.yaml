@@ -158,7 +158,7 @@ jobs:
           
           echo "environment=$environment" >> $GITHUB_OUTPUT
           echo "values_file=values.${environment}.yaml" >> $GITHUB_OUTPUT
-          echo "release_name=litter-${environment}" >> $GITHUB_OUTPUT
+          echo "release_name=${environment}" >> $GITHUB_OUTPUT
           echo "namespace=litter-${environment}" >> $GITHUB_OUTPUT
 
       - name: Azure login

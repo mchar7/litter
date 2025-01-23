@@ -8,7 +8,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  volumeName: {{ .Values.mongo.volume.pv.name }}
+  volumeName: {{ .Values.mongo.volume.pv.name }}_{{ .Release.Name }}
   storageClassName: {{ .Values.mongo.volume.storageClassName }}
 
   resources:

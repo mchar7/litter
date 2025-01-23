@@ -4,7 +4,7 @@ app:
 mongo:
   replicaCount: 1
   volume:
-    external: true
+    external: false
 ingress:
   host: litter-app-staging.eastus.cloudapp.azure.com
   tlsSecret: litter-app-staging-tls
