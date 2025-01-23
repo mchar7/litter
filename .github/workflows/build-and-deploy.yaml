@@ -172,17 +172,17 @@ jobs:
           cluster-name: ${{ env.AZURE_AKS_CLUSTER_NAME }}
           resource-group: ${{ env.AZURE_AKS_RESOURCE_GROUP }}
 
-      # merge values.yaml and the environment-specific values file
-      - name: Ensure writable chart directory
-        run: mkdir -p chart && chmod -R 777 chart
+      - name: Ensure writable chart directory (& debug)
+        run: ls -l chart && chmod -R 777 chart
 
+      # merge values.yaml and the environment-specific values file
       - name: Merge Helm values with yq
         id: merge-values
         uses: mikefarah/yq@master
         with:
           cmd: |
             yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' \
-            chart/values.common.yaml chart/${{ steps.determine-env.outputs.values_file }} > chart/merged.values.yaml
+            chart/values.common.yaml chart/${{ steps.determine-env.outputs.values_file }} > chart/values.yaml
 
       - name: Debug merged values file
         run: cat chart/merged.values.yaml
@@ -196,7 +196,7 @@ jobs:
           namespace: ${{ steps.determine-env.outputs.namespace }}
           releaseName: ${{ steps.determine-env.outputs.release_name }}
           helmChart: ./chart/
-          overrideFiles: ./chart/merged.values.yaml
+          overrideFiles: ./chart/values.yaml # merged values file
           overrides: |
             app.image.repository: ${{ needs.image-and-push.outputs.image_path }}
             app.image.tag: ${{ github.sha }}
