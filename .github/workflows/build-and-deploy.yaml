@@ -173,14 +173,19 @@ jobs:
           resource-group: ${{ env.AZURE_AKS_RESOURCE_GROUP }}
 
       # merge values.yaml and the environment-specific values file
+      - name: Ensure writable chart directory
+        run: mkdir -p chart && chmod -R 777 chart
+
       - name: Merge Helm values with yq
         id: merge-values
         uses: mikefarah/yq@master
         with:
           cmd: |
-            eval-all 'select(fileIndex == 0) * select(fileIndex == 1)'
-            chart/values.common.yaml chart/${{ steps.determine-env.outputs.values_file }}
-            > chart/merged.values.yaml
+            yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' \
+            chart/values.common.yaml chart/${{ steps.determine-env.outputs.values_file }} > chart/merged.values.yaml
+
+      - name: Debug merged values file
+        run: cat chart/merged.values.yaml
 
       # generate manifests using the merged values file
       - name: Generate manifests with Helm
