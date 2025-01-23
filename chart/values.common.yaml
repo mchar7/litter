@@ -60,7 +60,7 @@ mongo:
       name: litter-db-pvc
     csi:
       driver: disk.csi.azure.com
-      volumeHandle: "" # replaced via secret lookup in PV template
+      volumeHandle: "" # replaced during CI/CD pipeline
     storageClassName: managed-csi
   resources:
     requests:

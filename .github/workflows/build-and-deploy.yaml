@@ -198,6 +198,7 @@ jobs:
           helmChart: ./chart/
           overrideFiles: ./chart/values.yaml # merged values file
           overrides: |
+            mongo.volume.csi.volumeHandle: ${{ secrets.MONGO_CSI_VOLUMEHANDLE }}
             app.image.repository: ${{ needs.image-and-push.outputs.image_path }}
             app.image.tag: ${{ github.sha }}
 

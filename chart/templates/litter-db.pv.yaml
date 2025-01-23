@@ -15,14 +15,7 @@ spec:
     - ReadWriteOnce
   csi:
     driver: {{ .Values.mongo.volume.csi.driver }}
-    volumeHandle:
-    # lookup the volume handle from the secret, ensure it exists
-      {{- $secret := lookup "v1" "Secret" .Release.Namespace .Values.secrets.name }}
-      {{- if and $secret $secret.data }}
-      {{ index $secret.data "mongo-volumehandle" | b64dec | quote }}
-      {{- else }}
-      {{ fail "Secret 'litter-secrets' or key 'mongo-volumehandle' not found" }}
-      {{- end }}
+    volumeHandle: {{ required "VolumeHandle is required" .Values.mongo.volume.csi.volumeHandle }}
     volumeAttributes:
       fsType: {{ .Values.mongo.volume.fsType }}
   persistentVolumeReclaimPolicy: Retain
