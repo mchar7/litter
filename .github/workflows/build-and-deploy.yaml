@@ -173,7 +173,7 @@ jobs:
           resource-group: ${{ env.AZURE_AKS_RESOURCE_GROUP }}
 
       - name: Ensure writable chart directory (& debug)
-        run: ls -l chart && chmod -R 777 chart
+        run: chmod 777 chart/
 
       # merge values.yaml and the environment-specific values file
       - name: Merge Helm values with yq
@@ -185,7 +185,7 @@ jobs:
             chart/values.common.yaml chart/${{ steps.determine-env.outputs.values_file }} > chart/values.yaml
 
       - name: Debug merged values file
-        run: cat chart/merged.values.yaml
+        run: cat chart/values.yaml
 
       # generate manifests using the merged values file
       - name: Generate manifests with Helm
