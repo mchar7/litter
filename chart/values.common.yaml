@@ -31,7 +31,7 @@ app:
       valueFrom:
         secretKeyRef:
           name: litter-secrets
-          key: mongodb-uri
+          key: mongo-uri
     - name: JWT_SECRET # replaced via secret (stored in k8s cluster)
       valueFrom:
         secretKeyRef:

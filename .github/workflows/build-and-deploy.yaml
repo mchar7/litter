@@ -128,7 +128,7 @@ jobs:
     permissions:
       actions: read
       contents: read
-    timeout-minutes: 5
+    timeout-minutes: 15
 
     steps:
       # checkout code for Helm chart
@@ -172,7 +172,7 @@ jobs:
           cluster-name: ${{ env.AZURE_AKS_CLUSTER_NAME }}
           resource-group: ${{ env.AZURE_AKS_RESOURCE_GROUP }}
 
-      - name: Ensure writable chart directory (& debug)
+      - name: Ensure writable chart directory
         run: chmod 777 chart/
 
       # merge values.yaml and the environment-specific values file
@@ -198,7 +198,7 @@ jobs:
           helmChart: ./chart/
           overrideFiles: ./chart/values.yaml # merged values file
           overrides: |
-            mongo.volume.csi.volumeHandle: ${{ secrets.MONGO_CSI_VOLUMEHANDLE }}
+            mongo.volume.csi.volumeHandle: ${{ secrets.MONGO_VOLUMEHANDLE }}
             app.image.repository: ${{ needs.image-and-push.outputs.image_path }}
             app.image.tag: ${{ github.sha }}
 
