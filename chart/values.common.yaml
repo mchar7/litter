@@ -50,6 +50,8 @@ mongo:
       name: litter-db-pv
     pvc:
       name: litter-db-pvc
+    size: "4Gi"
+    storageClassName: "managed-csi"
   resources:
     requests:
       memory: "512Mi"
