@@ -16,13 +16,13 @@ app:
     port: 8080
   resources:
     requests:
-      memory: "256Mi"
-      cpu: "100m"
-      storage: "256Mi"
+      memory: "128Mi"
+      cpu: "50m"
+      storage: "128Mi"
     limits:
       memory: "512Mi"
-      cpu: "500m"
-      storage: "512Mi"
+      cpu: "250m"
+      storage: "256Mi"
   env:
     - name: MONGODB_URI  # replaced via k8s secret
       valueFrom:
@@ -56,10 +56,10 @@ mongo:
     storageClassName: "managed-csi"
   resources:
     requests:
-      memory: "512Mi"
-      cpu: "100m"
+      memory: "256Mi"
+      cpu: "50m"
       storage: "256Mi"
     limits:
       memory: "512Mi"
-      cpu: "500m"
-      storage: "1Gi"
+      cpu: "250m"
+      storage: "2Gi"

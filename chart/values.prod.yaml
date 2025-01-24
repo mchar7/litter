@@ -1,12 +1,12 @@
 # overrides for prod environment
 # if no overrides are needed, include an empty object "---" or else yq will error
 app:
-  replicaCount: 3
+  replicaCount: 2
   resources:
     requests:
-      memory: "512Mi" # double base resources for prod
-      cpu: "200m"
-      storage: "512Mi"
+      memory: "128Mi" # higher resource allocation for prod
+      cpu: "100m"
+      storage: "256Mi"
     limits:
       memory: "1Gi"
       cpu: "1"
@@ -14,7 +14,7 @@ app:
 mongo:
   resources:
     requests:
-      memory: "1Gi" # double base resources for prod
+      memory: "512Mi" # higher resource allocation for prod
       cpu: "200m"
       storage: "512Mi"
     limits:
