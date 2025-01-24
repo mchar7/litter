@@ -51,6 +51,8 @@ mongo:
     pvc:
       name: litter-db-pvc
     size: "4Gi"
+    mountPath: /data/db
+    mountName: mongo-data
     storageClassName: "managed-csi"
   resources:
     requests:
