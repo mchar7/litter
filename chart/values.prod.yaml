@@ -1,4 +1,5 @@
 # overrides for prod environment
+# if no overrides are needed, include an empty object "---" or else yq will error
 app:
   replicaCount: 3
   resources:
