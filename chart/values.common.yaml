@@ -1,19 +1,18 @@
 app:
-  imagePullSecrets: [ { name: "container-registry-secret" } ]
   replicaCount: 2
   metadata:
-    appVersion: ""  # replaced during CI/CD pipeline
     labels:
       app: litter-app
       sa: litter-app-sa
       component: app
     friendlyAppName: "Litter"
   image:
-    tag: ""  # replaced during CI/CD pipeline
+    tag: ""         # replaced during CI/CD pipeline
     repository: ""  # replaced during CI/CD pipeline
     pullPolicy: Always
   service:
     port: 8080
+    selector: litter-app
   resources:
     requests:
       memory: "128Mi"
@@ -24,17 +23,27 @@ app:
       cpu: "250m"
       storage: "256Mi"
   env:
-    - name: MONGODB_URI  # replaced via k8s secret
+    - name: MONGO_HOST
+      value: "{{ .Values.mongo.service.name }}"
+    - name: MONGO_PORT
+      value: "{{ .Values.mongo.service.port }}"
+    - name: MONGO_DB
+      value: "{{ .Values.mongo.dbName }}"
+    - name: MONGO_USER
       valueFrom:
         secretKeyRef:
           name: litter-secrets
-          key: mongo-uri
-    - name: JWT_SECRET  # replaced via k8s secret
+          key: mongo-app-username
+    - name: MONGO_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: litter-secrets
+          key: mongo-app-password
+    - name: JWT_SECRET
       valueFrom:
         secretKeyRef:
           name: litter-secrets
           key: jwt-secret
-
 mongo:
   replicaCount: 1
   metadata:
@@ -45,15 +54,15 @@ mongo:
   image:
     repository: mongo
     tag: "8.0"
+  service:
+    port: 27017
+    selector: litter-db
+  dbName: litter
   volume:
-    pv:
-      name: litter-db-pv
     pvc:
       name: litter-db-pvc
-    size: "4Gi"
     mountPath: /data/db
     mountName: mongo-data
-    storageClassName: "managed-csi"
   resources:
     requests:
       memory: "256Mi"
