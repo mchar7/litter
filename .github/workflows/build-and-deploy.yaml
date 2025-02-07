@@ -3,9 +3,10 @@ permissions:
   contents: read
 env:
   REGISTRY: ghcr.io
-  ACME_ROOT_DOMAIN: "litter.dev"
-  AZURE_AKS_CLUSTER_NAME: litter-k8s-cluster
-  AZURE_AKS_RESOURCE_GROUP: litter-k8s
+  AZ_DNS_RG: "litter-dns-rg"
+  AZ_DNS_ZONE_NAME: "litter.dev"
+  AZ_AKS_RG: litter-k8s
+  AZ_AKS_CLUSTER_NAME: litter-k8s-cluster
 on:
   # On pull request to 'main' branch, deploy to 'staging' k8s environment
   #   to further test the app. Once manually approved, the app is deployed to 'prod'
@@ -182,6 +183,8 @@ jobs:
         run: |
           terraform plan \
             -var-file="example.tfvars" \
+            -var "az_dns_rg=${{ env.AZ_DNS_RG }}" \
+            -var "az_dns_zone_name=${{ env.AZ_DNS_ZONE_NAME }}" \
             -var "az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var "acme_root_domain=${{ env.ACME_ROOT_DOMAIN }}" \
             -var "app_image_repo_url=${{ steps.image-path.outputs.image_path }}" \
