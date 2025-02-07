@@ -2,17 +2,18 @@
 // it will be referenced in the main README.adoc file
 // it uses GitHub Flavored AsciiDoc (GFA) for alerts, etc.
 ifdef::env-github[]
-:tip-caption: :bulb: TIP
-:note-caption: :information_source: NOTE
-:important-caption: :heavy_exclamation_mark: IMPORTANT
-:caution-caption: :fire: CAUTION
-:warning-caption: :warning: WARNING
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
 endif::[]
 
 = Terraform Deployment Instructions
 :description: Step-by-step guide for deploying the Litter application to Azure using Terraform and AKS
 :keywords: terraform, azure, kubernetes, aks, infrastructure-as-code
 :toc: preamble
+:toc-title: Contents
 :source-highlighter: rouge
 
 [.lead]
