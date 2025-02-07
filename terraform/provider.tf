@@ -39,7 +39,9 @@ locals {
 
 provider "azurerm" {
   features {}
-  # using Azure CLI authentication; no need to explicitly set client_id, client_secret, or tenant_id
+  # when using Azure CLI authentication; no need to explicitly set client_id, client_secret, or tenant_id
+  # when using a service principal (needed for GitHub Actions); they must be environment variables
+  #   see: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/guides/service_principal_client_secret
   subscription_id = var.az_subscription_id
 }
 
