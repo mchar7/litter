@@ -60,6 +60,7 @@ jobs:
     needs:
       - build-with-gradle
     permissions:
+      contents: read
       packages: write
     timeout-minutes: 5
     steps:
