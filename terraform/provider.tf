@@ -68,11 +68,3 @@ provider "kubectl" {
   cluster_ca_certificate = local.kubeconfig.cluster_ca_certificate
   load_config_file       = false
 }
-
-provider "namecheap" {
-  user_name   = data.azurerm_key_vault_secret.kv_registrar_username.value
-  api_user    = data.azurerm_key_vault_secret.kv_registrar_api_user.value
-  api_key     = data.azurerm_key_vault_secret.kv_registrar_api_key.value
-  client_ip   = data.azurerm_key_vault_secret.kv_registrar_client_ip.value
-  use_sandbox = "false"
-}

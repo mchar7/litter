@@ -157,16 +157,13 @@ resource "azurerm_public_ip" "litter_ip" {
   resource_group_name = azurerm_kubernetes_cluster.aks.node_resource_group
 }
 
-# manage DNS records via Namecheap
-resource "namecheap_domain_records" "litter_dns" {
-  domain = var.acme_root_domain
-  record {
-    address = azurerm_public_ip.litter_ip.ip_address
-    hostname = var.app_environment
-    # e.g. dev.example.com where var.app_environment = "dev" & var.acme_root_domain = "example.com"
-    type    = "A"
-    ttl     = 300
-  }
+# create/adjust the DNS A record to point to the app's public IP
+resource "azurerm_dns_a_record" "litter_dns" {
+  name                = var.app_environment
+  zone_name           = var.az_dns_zone_name
+  resource_group_name = var.az_dns_rg
+  ttl = 300 # keep low for rapid testing/iteration
+  records = [azurerm_public_ip.litter_ip.ip_address]
 }
 
 # create all the Cert-Manager related resources
@@ -188,13 +185,13 @@ module "cert_manager" {
   certificates = {
     "${var.app_name}-${var.app_environment}" = {
       namespace   = "${var.app_name}-${var.app_environment}"
-      dns_names = ["${var.app_environment}.${var.acme_root_domain}"]
+      dns_names = ["${var.app_environment}.${var.az_dns_zone_name}"]
       secret_name = "${var.app_name}-tls-${var.app_environment}"
     }
   }
   depends_on = [
     helm_release.nginx_ingress,
-    namecheap_domain_records.litter_dns,
+    azurerm_dns_a_record.litter_dns,
   ]
 }
 
@@ -210,11 +207,11 @@ resource "kubernetes_ingress_v1" "litter_ingress" {
   spec {
     ingress_class_name = "nginx"
     tls {
-      hosts = ["${var.app_environment}.${var.acme_root_domain}"]
+      hosts = ["${var.app_environment}.${var.az_dns_zone_name}"]
       secret_name = "${var.app_name}-tls-${var.app_environment}"
     }
     rule {
-      host = "${var.app_environment}.${var.acme_root_domain}"
+      host = "${var.app_environment}.${var.az_dns_zone_name}"
       http {
         path {
           path      = "/"
@@ -232,7 +229,11 @@ resource "kubernetes_ingress_v1" "litter_ingress" {
     }
   }
   wait_for_load_balancer = true
-  depends_on = [module.cert_manager, helm_release.litter, namecheap_domain_records.litter_dns]
+  depends_on = [
+    module.cert_manager,
+    helm_release.litter,
+    azurerm_dns_a_record.litter_dns
+  ]
 }
 
 ############################################################

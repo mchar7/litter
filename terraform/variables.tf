@@ -149,13 +149,20 @@ variable "use_kv_docker_cfg" {
 ############################################################
 # ACME & IMAGE CONFIGURATION
 ############################################################
+variable "az_dns_rg" {
+  type        = string
+  description = "Azure resource group for the DNS zone"
+  default     = "litter-dns-rg"
+}
+
+variable "az_dns_zone_name" {
+  type        = string
+  description = "Azure DNS zone name (e.g., litter.dev)"
+  default     = "litter.dev"
+}
+
 variable "acme_server" {
   type        = string
   description = "ACME server URL"
   default     = "https://acme-v02.api.letsencrypt.org/directory" # can switch to staging for testing
-}
-
-variable "acme_root_domain" {
-  type        = string
-  description = "Root domain for the app (e.g., example.com)"
 }

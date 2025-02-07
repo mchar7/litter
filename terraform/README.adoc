@@ -15,17 +15,11 @@ Below are the steps to deploy this project onto Azure using Terraform.
 ====
 .Prerequisites
 [.prerequisites]
+* [x] Azure account and subscription
 * [x] Unix-based terminal (Linux, macOS, WSL, etc.)
 * [x] Terraform link:https://learn.hashicorp.com/tutorials/terraform/install-cli[installed]
 * [x] Azure CLI link:https://learn.microsoft.com/en-us/cli/azure/install-azure-cli[installed] and logged in
-* [x] Azure account and subscription
-* [x] Domain name and access to its DNS records (for HTTPS)
-** If your domain is with Namecheap:
-*** You'll need to request API access from Namecheap.
-They have certain requirements for this.
-** If your domain is with another registrar:
-*** This Terraform setup is configured for Namecheap.
-You'll need to modify it for another registrar.
+* [x] A domain name, with the ability to set custom nameservers (they will need to point to Azure DNS)
 * [x] Docker image repository (e.g., Docker Hub, Azure Container Registry, etc.) for the app, with the image pushed
 ====
 
@@ -57,7 +51,25 @@ az storage container create \
 ----
 ====
 
-== Step 1: link:https://learn.microsoft.com/en-us/azure/key-vault/secrets/quick-create-cli[Set up your Key Vault]
+Before running Terraform, you must also set up Azure DNS.
+Ensure that you create a resource group for your DNS zone, create the DNS zone, and link:https://learn.microsoft.com/en-us/azure/dns/dns-delegate-domain-azure-dns[adjust your registrar's nameservers to point to Azure DNS].
+
+.Click to see example Azure CLI commands for setting up your Azure DNS zone
+[%collapsible]
+====
+[source,bash]
+----
+# Create the resource group for your DNS zone
+az group create --name litter-dns-rg --location EastUS
+
+# Create the DNS zone (e.g., litter.dev)
+az network dns zone create \
+  --resource-group litter-dns-rg \
+  --name litter.dev
+----
+====
+
+== Step 1: Set up your Azure Key Vault
 
 Set environment variables in your terminal for the key vault and its resource group's names, as well as the Azure location:
 
@@ -97,7 +109,6 @@ This Terraform setup pulls sensitive values (such as credentials and application
 
 Make sure you set them with the following secret names:
 
-.Example secret configuration commands
 [source,bash]
 ----
 az keyvault secret set --vault-name $KV_NAME --name "db-user-username"  --value "<mongo-username>"
@@ -114,24 +125,6 @@ If you have a private container registry, create a link:https://docs.docker.com/
 ----
 az keyvault secret set --vault-name $KV_NAME --name "docker-cfg" --file "<your-docker.json>"
 ----
-
-You do not need to do this if your Litter image is hosted on a publicly-accessible registry.
-
-====
-
-Assuming you're using Namecheap for domain records, add your registrar credentials:
-
-[source,bash]
-----
-az keyvault secret set --vault-name $KV_NAME --name "registrar-username"  --value "<username>"
-az keyvault secret set --vault-name $KV_NAME --name "registrar-api-user"  --value "<api-user>"
-az keyvault secret set --vault-name $KV_NAME --name "registrar-api-key"   --value "<api-key>"
-az keyvault secret set --vault-name $KV_NAME --name "registrar-client-ip" --value "<client-ip>"
-----
-
-[CAUTION]
-====
-Your registrar credentials are very powerful and can be used to modify any domains in your account (this is true for Namecheap, at least).
 ====
 
 == Step 3: Create Your .tfvars file
@@ -140,8 +133,8 @@ This Terraform setup relies on variables; review and edit the sample provided in
 Copy it to a new file (e.g., `litter.tfvars`), and fill in your details.
 
 The Terraform configuration deploys to a single environment.
-Set the "environment" variable in the tfvars file to your target environment (e.g., dev, staging, prod).
-If you change this value often, you can override it at the command line with `-var="environment=dev"`.
+Set the "app_environment" variable in the tfvars file to your target environment (e.g., dev, staging, prod).
+If you change this value often, you can override it at the command line with `-var="app_environment=dev"`.
 This should be placed after the `-var-file="litter.tfvars"` argument so that it takes precedence.
 
 .Click to show `-var` override example
@@ -149,17 +142,8 @@ This should be placed after the `-var-file="litter.tfvars"` argument so that it 
 ====
 [source,bash]
 ----
-terraform apply -var-file="litter.tfvars" -var="environment=dev"
+terraform apply -var-file="litter.tfvars" -var="app_environment=dev"
 ----
-====
-
-If you don't use Namecheap, you will need to remove and replace the `namecheap_domain_records` resource in the Terraform files with your own implementation for your domain registrar.
-
-[NOTE]
-====
-The `example.tfvars` is pre-configured with some resource values that allowed me to run the AKS cluster as cheaply as possible.
-
-You'll probably want to adjust these values higher if you actually expect the site to receive any significant traffic and/or want redundancy or scalable load handling.
 ====
 
 == Step 4: Deploy Your Infrastructure
@@ -180,24 +164,15 @@ Once complete, Terraform will have provisioned:
 
 1. An AKS cluster (with the specified number of nodes, load balancer, etc.)
 2. A namespace, secret(s), database storage, and a Helm chart deployment of the Litter app & database
-3. An ingress controller, public IP, and DNS records with Namecheap
+3. An ingress controller, public IP, and DNS records managed via Azure DNS
 4. A Key Vault-based secret retrieval flow
 
-== Step 5 (Optional): Create a CI/CD Service Principal with Fewer Permissions
+== Step 5 (Optional): Create a CI/CD Service Principal with General Contributor Role
 
-If you'll run Terraform in a CI/CD pipeline, you'll need a service principal with permission to manage the Terraform state, AKS cluster, and Public IP.
-Since the resource groups for the AKS cluster and Public IP don’t exist before apply, we assign:
-
-* On the existing storage account:
-- Storage Blob Data Contributor
-- Storage Account Key Operator Service Role
-* For future AKS cluster creation:
-- Azure Kubernetes Service Contributor
-* For future Public IP creation:
-- Network Contributor
+If you'll run Terraform in a CI/CD pipeline, you'll need a service principal with broad permissions to manage the Terraform state, AKS cluster, and Public IP.
+For convenience during initial deployments, we assign the built‑in Contributor role at the subscription level.
 
 .Click to expand the service principal creation commands:
-
 [%collapsible]
 ====
 [source,bash]
@@ -219,39 +194,28 @@ CI_SP_APP_ID=$(echo "$CI_SP_OUTPUT" | sed -n 's/.*"appId": *"\([^"]*\)".*/\1/p')
 # Get the service principal's Object ID.
 CI_SP_OBJECT_ID=$(az ad sp show --id $CI_SP_APP_ID --query id -o tsv)
 
-# Define storage account details (already exists).
-STORAGE_ACCT_RG="litter-state-rg"
-STORAGE_ACCT_NAME="litterstatestorage"
+# Assign the Contributor role to the service principal at the subscription level.
+az role assignment create --assignee $CI_SP_OBJECT_ID --role "Contributor" --scope "/subscriptions/$SUBSCRIPTION_ID"
 
-# Retrieve the storage account resource ID.
-TFSTATE_ID=$(az storage account show --name $STORAGE_ACCT_NAME --resource-group $STORAGE_ACCT_RG --query id -o tsv)
-
-# Assign Storage roles on the storage account.
-az role assignment create --assignee $CI_SP_OBJECT_ID --role "Storage Blob Data Contributor" --scope $TFSTATE_ID
-az role assignment create --assignee $CI_SP_OBJECT_ID --role "Storage Account Key Operator Service Role" --scope $TFSTATE_ID
-
-# Assign minimal roles at the subscription level for future AKS and Public IP.
-az role assignment create --assignee $CI_SP_OBJECT_ID --role "Azure Kubernetes Service RBAC Cluster Admin" --scope "/subscriptions/$SUBSCRIPTION_ID"
-az role assignment create --assignee $CI_SP_OBJECT_ID --role "Network Contributor" --scope "/subscriptions/$SUBSCRIPTION_ID"
-
-echo "CI/CD service principal created and roles assigned."
+echo "CI/CD service principal created and Contributor role assigned."
 ----
 ====
 
 [NOTE]
 ====
-In production, you may wish to refine the subscription-level permissions once the resource groups exist.
+In production, you may wish to refine the scope of the Contributor permission.
+For long‑term core resources that you don't expect to tear down often, consider narrowing the role assignment to just those resources rather than using a subscription‑wide assignment.
 ====
 
 == That's It!
 
 You should now have a running Kubernetes cluster with the Litter app deployed.
-You should be able to access it over HTTPS via `(environment name)`.`(root domain)`.`(your domain)`.`(tld)`.
+You should be able to access it over HTTPS via `(app_environment).(dns_zone_name)`.
+For example, if your environment is "dev" and your DNS zone is "litter.dev", the URL would be https://dev.litter.dev.
 
 [WARNING]
 ====
-
 Keep your secrets safe.
 If you fork this repository, remember not to commit any sensitive data.
-Also, store your `.tfvars` file securely or add it to `.gitignore`.
+Also, store your .tfvars file securely or add it to `.gitignore`.
 ====

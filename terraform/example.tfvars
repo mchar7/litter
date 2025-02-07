@@ -4,6 +4,8 @@
 ###############################################################################
 
 # Azure configuration
+az_dns_rg        = "litter-dns-rg"
+az_dns_zone_name = "litter.dev"
 az_subscription_id = "00000000-0000-0000-0000-000000000000"
 
 # core resource settings
@@ -31,8 +33,7 @@ mongo_overwrite_existing_db = false
 mongo_sample_collections_dir = "./resources/sample_data"
 
 # ACME and domain configuration
-acme_root_domain = "example.com"
-acme_server      = "https://acme-v02.api.letsencrypt.org/directory" # Let's Encrypt production server
+acme_server = "https://acme-v02.api.letsencrypt.org/directory" # Let's Encrypt production server
 # acme_server = "https://acme-staging-v02.api.letsencrypt.org/directory" # staging server
 
 # key vault configuration (all sensitive secrets are stored in the KV)

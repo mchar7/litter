@@ -30,30 +30,6 @@ data "azurerm_key_vault_secret" "kv_acme_email" {
   key_vault_id = data.azurerm_key_vault.kv.id
 }
 
-# The Key Vault secret for the registrar username
-data "azurerm_key_vault_secret" "kv_registrar_username" {
-  name         = "registrar-username"
-  key_vault_id = data.azurerm_key_vault.kv.id
-}
-
-# The Key Vault secret for the registrar API user
-data "azurerm_key_vault_secret" "kv_registrar_api_user" {
-  name         = "registrar-api-user"
-  key_vault_id = data.azurerm_key_vault.kv.id
-}
-
-# The Key Vault secret for the registrar API key
-data "azurerm_key_vault_secret" "kv_registrar_api_key" {
-  name         = "registrar-api-key"
-  key_vault_id = data.azurerm_key_vault.kv.id
-}
-
-# The Key Vault secret for the registrar client IP
-data "azurerm_key_vault_secret" "kv_registrar_client_ip" {
-  name         = "registrar-client-ip"
-  key_vault_id = data.azurerm_key_vault.kv.id
-}
-
 # The Key Vault secret for the Docker config JSON. It should contain your docker login credentials.
 # You do not need to set this secret in the Key Vault if you are using a public registry.
 data "azurerm_key_vault_secret" "kv_docker_cfg" {
