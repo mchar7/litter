@@ -63,6 +63,8 @@ jobs:
       contents: read
       packages: write
     timeout-minutes: 5
+    outputs:
+      image_path: ${{ steps.image-path.outputs.image_path }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -186,7 +188,7 @@ jobs:
             -var "az_dns_rg=${{ env.AZ_DNS_RG }}" \
             -var "az_dns_zone_name=${{ env.AZ_DNS_ZONE_NAME }}" \
             -var "az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
-            -var "app_image_repo_url=${{ steps.image-path.outputs.image_path }}" \
+            -var "app_image_repo_url=${{ needs.image-and-push.outputs.image_path }}" \
             -var "app_image_tag=${{ github.sha }}" \
             -var "app_environment=${{ steps.determine-env.outputs.environment }}" \
             -out=tfplan

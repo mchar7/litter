@@ -2,22 +2,18 @@
 // it will be referenced in the main README.adoc file
 // it uses GitHub Flavored AsciiDoc (GFA) for alerts, etc.
 ifdef::env-github[]
-:tip-caption: :bulb:
-:note-caption: :information_source:
-:important-caption: :heavy_exclamation_mark:
-:caution-caption: :fire:
-:warning-caption: :warning:
+:tip-caption: :bulb: TIP
+:note-caption: :information_source: NOTE
+:important-caption: :heavy_exclamation_mark: IMPORTANT
+:caution-caption: :fire: CAUTION
+:warning-caption: :warning: WARNING
 endif::[]
 
 = Helm Chart for Litter
 :description: Kubernetes application manifests for the Litter app and MongoDB deployment using Helm
 :keywords: helm, kubernetes, mongodb, deployment, infrastructure-as-code
 :toc: preamble
-:icons: font
 :source-highlighter: rouge
-:sectlinks:
-:sectanchors:
-:nofooter:
 
 [.lead]
 This chart provides the Kubernetes application manifests for the Litter app and a MongoDB instance.
@@ -25,8 +21,8 @@ It doesn't manage all the peripheral details (like PVC creation, certificates, o
 I'd recommend using the Terraform setup in this repository to handle the entire end-to-end infrastructure.
 
 [IMPORTANT]
-====
 .Prerequisites
+====
 [.prerequisites]
 * [x] Unix-based terminal (Linux, macOS, WSL, etc.)
 * [x] Helm link:https://helm.sh/docs/intro/install/[installed] and configured on your local machine

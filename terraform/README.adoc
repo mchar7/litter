@@ -1,19 +1,26 @@
+// this AsciiDoc file is to go in ./terraform/README.adoc
+// it will be referenced in the main README.adoc file
+// it uses GitHub Flavored AsciiDoc (GFA) for alerts, etc.
+ifdef::env-github[]
+:tip-caption: :bulb: TIP
+:note-caption: :information_source: NOTE
+:important-caption: :heavy_exclamation_mark: IMPORTANT
+:caution-caption: :fire: CAUTION
+:warning-caption: :warning: WARNING
+endif::[]
+
 = Terraform Deployment Instructions
 :description: Step-by-step guide for deploying the Litter application to Azure using Terraform and AKS
 :keywords: terraform, azure, kubernetes, aks, infrastructure-as-code
 :toc: preamble
-:icons: font
 :source-highlighter: rouge
-:sectlinks:
-:sectanchors:
-:nofooter:
 
 [.lead]
 Below are the steps to deploy this project onto Azure using Terraform.
 
 [IMPORTANT]
-====
 .Prerequisites
+====
 [.prerequisites]
 * [x] Azure account and subscription
 * [x] Unix-based terminal (Linux, macOS, WSL, etc.)
@@ -69,7 +76,9 @@ az network dns zone create \
 ----
 ====
 
-== Step 1: Set up your Azure Key Vault
+== Instructions
+
+=== Step 1: link:https://learn.microsoft.com/en-us/azure/key-vault/secrets/quick-create-cli[Set up your Azure Key Vault]
 
 Set environment variables in your terminal for the key vault and its resource group's names, as well as the Azure location:
 
@@ -103,7 +112,7 @@ KEYVAULT_ID=$(az keyvault show --name $KV_NAME --resource-group $KV_RESOURCE_GRO
 az role assignment create --assignee $CURRENT_USER_OBJECT_ID --role "Key Vault Secrets Officer" --scope $KEYVAULT_ID
 ----
 
-== Step 2: Set the required secrets
+=== Step 2: Set the required secrets
 
 This Terraform setup pulls sensitive values (such as credentials and application secrets) from your Azure Key Vault.
 
@@ -127,7 +136,7 @@ az keyvault secret set --vault-name $KV_NAME --name "docker-cfg" --file "<your-d
 ----
 ====
 
-== Step 3: Create Your .tfvars file
+=== Step 3: Create Your .tfvars file
 
 This Terraform setup relies on variables; review and edit the sample provided in `example.tfvars`.
 Copy it to a new file (e.g., `litter.tfvars`), and fill in your details.
@@ -146,7 +155,7 @@ terraform apply -var-file="litter.tfvars" -var="app_environment=dev"
 ----
 ====
 
-== Step 4: Deploy Your Infrastructure
+=== Step 4: Deploy Your Infrastructure
 
 From the `./terraform` directory, initialize and apply:
 
@@ -167,10 +176,10 @@ Once complete, Terraform will have provisioned:
 3. An ingress controller, public IP, and DNS records managed via Azure DNS
 4. A Key Vault-based secret retrieval flow
 
-== Step 5 (Optional): Create a CI/CD Service Principal with General Contributor Role
+=== Step 5 (Optional): Create a CI/CD Service Principal with General Contributor Role
 
-If you'll run Terraform in a CI/CD pipeline, you'll need a service principal with broad permissions to manage the Terraform state, AKS cluster, and Public IP.
-For convenience during initial deployments, we assign the built‑in Contributor role at the subscription level.
+If you'll run Terraform in a CI/CD pipeline, you're going to need a service principal with broad permissions to manage the Terraform state, AKS cluster, and public IP.
+For convenience during initial deployments, we can assign the built‑in Contributor role at the subscription level.
 
 .Click to expand the service principal creation commands:
 [%collapsible]
@@ -205,6 +214,8 @@ echo "CI/CD service principal created and Contributor role assigned."
 ====
 In production, you may wish to refine the scope of the Contributor permission.
 For long‑term core resources that you don't expect to tear down often, consider narrowing the role assignment to just those resources rather than using a subscription‑wide assignment.
+
+I tried using very narrow service principal permissions for the initial deployment, but the Azure service principal requires a lot of permissions when the app's infrastructure is being provisioned for the first time.
 ====
 
 == That's It!
