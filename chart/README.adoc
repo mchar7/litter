@@ -11,7 +11,7 @@ endif::[]
 
 = Helm Chart for Litter
 :description: Kubernetes application manifests for the Litter app and MongoDB deployment using Helm
-:keywords: helm, kubernetes, mongodb, deployment, infrastructure-as-code
+:keywords: helm, kubernetes, mongodb, deployment
 :toc: preamble
 :source-highlighter: rouge
 

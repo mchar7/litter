@@ -6,7 +6,7 @@ LABEL maintainer="Matt Chard"
 LABEL description="Litter backend container"
 
 # copy jar
-COPY litter.jar /app/litter.jar
+COPY build/libs/litter.jar /app/litter.jar
 EXPOSE 8080
 
 # run the app
