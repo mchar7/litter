@@ -282,6 +282,7 @@ resource "kubernetes_config_map" "mongo_sample_collections_cm" {
     "litter_sample_messages.json" = file("${var.mongo_sample_collections_dir}/litter_sample_messages.json")
     "litter_sample_subscriptions.json" = file("${var.mongo_sample_collections_dir}/litter_sample_subscriptions.json")
   }
+  depends_on = [kubernetes_namespace.env]
 }
 
 # restore job (for non-prod environment only)

@@ -183,58 +183,65 @@ Once complete, Terraform will have provisioned:
 3. An ingress controller, public IP, and DNS records with Namecheap
 4. A Key Vault-based secret retrieval flow
 
-== Step 5: (Optional) Create a CI/CD service principal for read‑only access
+== Step 5 (Optional): Create a CI/CD Service Principal with Fewer Permissions
 
-If you will be running this Terraform plan as part of a CI/CD pipeline, it will only need to read secrets.
-We can create a separate service principal and assign it the *Key Vault Secrets User* role (read‑only access).
+If you'll run Terraform in a CI/CD pipeline, you'll need a service principal with permission to manage the Terraform state, AKS cluster, and Public IP.
+Since the resource groups for the AKS cluster and Public IP don’t exist before apply, we assign:
 
-.Click to expand read-only service principal creation commands
+* On the existing storage account:
+- Storage Blob Data Contributor
+- Storage Account Key Operator Service Role
+* For future AKS cluster creation:
+- Azure Kubernetes Service Contributor
+* For future Public IP creation:
+- Network Contributor
+
+.Click to expand the service principal creation commands:
+
 [%collapsible]
 ====
-Run the following commands:
-
 [source,bash]
 ----
-# choose a name for your CI/CD service principal:
-CI_SP_NAME="ci-readonly-sp"
+# Choose a name for the CI/CD service principal.
+CI_SP_NAME="ci-principal"
 
-# create the service principal without any default role assignments.
-# capture the full JSON output (which includes your App ID, password, and tenant).
+# Get the subscription ID.
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+# Create the service principal and capture its credentials.
 CI_SP_OUTPUT=$(az ad sp create-for-rbac --name "$CI_SP_NAME" --skip-assignment --output json)
-echo "Service Principal credentials (store these securely):"
+echo "Store these credentials securely (e.g. as a GitHub Actions Secret):"
 echo "$CI_SP_OUTPUT"
 
-# extract the App ID using sed
+# Extract the App ID.
 CI_SP_APP_ID=$(echo "$CI_SP_OUTPUT" | sed -n 's/.*"appId": *"\([^"]*\)".*/\1/p')
 
-# retrieve the service principal's object ID
+# Get the service principal's Object ID.
 CI_SP_OBJECT_ID=$(az ad sp show --id $CI_SP_APP_ID --query id -o tsv)
 
-# assign the read‑only "Key Vault Secrets User" role to the service principal for your key vault
-az role assignment create --assignee $CI_SP_OBJECT_ID --role "Key Vault Reader" --scope $KEYVAULT_ID
+# Define storage account details (already exists).
+STORAGE_ACCT_RG="litter-state-rg"
+STORAGE_ACCT_NAME="litterstatestorage"
+
+# Retrieve the storage account resource ID.
+TFSTATE_ID=$(az storage account show --name $STORAGE_ACCT_NAME --resource-group $STORAGE_ACCT_RG --query id -o tsv)
+
+# Assign Storage roles on the storage account.
+az role assignment create --assignee $CI_SP_OBJECT_ID --role "Storage Blob Data Contributor" --scope $TFSTATE_ID
+az role assignment create --assignee $CI_SP_OBJECT_ID --role "Storage Account Key Operator Service Role" --scope $TFSTATE_ID
+
+# Assign minimal roles at the subscription level for future AKS and Public IP.
+az role assignment create --assignee $CI_SP_OBJECT_ID --role "Azure Kubernetes Service RBAC Cluster Admin" --scope "/subscriptions/$SUBSCRIPTION_ID"
+az role assignment create --assignee $CI_SP_OBJECT_ID --role "Network Contributor" --scope "/subscriptions/$SUBSCRIPTION_ID"
+
+echo "CI/CD service principal created and roles assigned."
 ----
 ====
 
 [NOTE]
-========
-If your CI/CD pipeline will be using a remote state (like the Azure-based one that this repository is pre-configured for), you'll need to set up the service principal with the appropriate permissions to access the remote state.
-
-.Click to show example state access permission grant
-[%collapsible]
 ====
-__(note: the below commands assume you are continuing from the previous section)__
-
-[source,bash]
-----
-# retrieve the resource ID of the storage account where your Terraform state is stored
-STORAGE_ACCT_RG="litter-state-rg"
-STORAGE_ACCT_NAME="litterstateacct"
-
-TFSTATE_ID=$(az storage account show --name $STORAGE_ACCT_NAME --resource-group $STORAGE_ACCT_RG --query id -o tsv)
-az role assignment create --assignee $CI_SP_OBJECT_ID --role "Storage Blob Data Contributor" --scope $TFSTATE_ID
-----
+In production, you may wish to refine the subscription-level permissions once the resource groups exist.
 ====
-========
 
 == That's It!
 
