@@ -1,0 +1,38 @@
+[
+  {
+    "_id": {
+      "$oid": "65c1e20f4bd9587f9b6bd949"
+    },
+    "username": "jane",
+    "passwordHash": "$argon2id$v=19$m=16384,t=2,p=1$hmrGUBydLJlmFoQEQLXUiA$/H2ax7CY6Vsw0GNUPLEdfJU5YRsfv5mldO1dFOe7dE0",
+    "roles": [
+      "ROLE_SUBSCRIBER"
+    ],
+    "_class": "org.ac.cst8277.chard.matt.model.User"
+  },
+  {
+    "_id": {
+      "$oid": "65c1e20f4bd9587f9b6bd94a"
+    },
+    "username": "john",
+    "passwordHash": "$argon2id$v=19$m=16384,t=2,p=1$H/G50edyPQYwTcCToHjofA$+n5uMYYnrBvIoNK1tm5acZopZmPrkkXh69GC6XON0Xg",
+    "roles": [
+      "ROLE_SUBSCRIBER",
+      "ROLE_PRODUCER"
+    ],
+    "_class": "org.ac.cst8277.chard.matt.model.User"
+  },
+  {
+    "_id": {
+      "$oid": "65c1e20f4bd9587f9b6bd94d"
+    },
+    "username": "matt",
+    "passwordHash": "$argon2id$v=19$m=16384,t=2,p=1$zvFicXDlgaUa5zK1Zf9PEw$YNhQdPn1ZKkNfDn4ha9lavkAIMX2EdJ4WzFZX9m8aHU",
+    "roles": [
+      "ROLE_SUBSCRIBER",
+      "ROLE_PRODUCER",
+      "ROLE_ADMIN"
+    ],
+    "_class": "org.ac.cst8277.chard.matt.litter.model.User"
+  }
+]

@@ -1,15 +1,19 @@
-name: Build and Deploy
+name: Build and Deploy with Terraform
 
 env:
+  REGISTRY: ghcr.io
+  ACME_ROOT_DOMAIN: "litter.dev"
+  TERRAFORM_WORKING_DIR: ./terraform
   AZURE_AKS_CLUSTER_NAME: litter-k8s-cluster
   AZURE_AKS_RESOURCE_GROUP: litter-k8s
-  REGISTRY: ghcr.io
 
 on:
+  # On pull request to 'main' branch, deploy to 'staging' k8s environment
+  #   to further test the app. Once manually approved, the app is deployed to 'prod'
   pull_request:
     branches:
       - main
-      - staging
+  # Allow manual trigger of workflow to deploy to specified environment
   workflow_dispatch:
     inputs:
       environment:
@@ -22,6 +26,7 @@ on:
           - "prod"
 
 jobs:
+  # Build the app with Gradle, generating test reports and (if successful) a JAR artifact
   build-with-gradle:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -44,38 +49,36 @@ jobs:
       - name: Execute Gradle build (with tests)
         run: ./gradlew build
 
-      # save the built JAR as artifact for building Docker image, ensure success
+      # Save the built JAR as an artifact for Docker image creation
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-jar
+          name: litter-jar
           path: build/libs/litter.jar
           if-no-files-found: error
 
+  # If build (& tests) successful, build Docker image and push to container registry
   image-and-push:
     runs-on: ubuntu-latest
-    environment: "Actions Environment"
     needs:
       - build-with-gradle
     permissions:
       contents: read
       packages: write
-    outputs:
-      image_path: ${{ steps.image-path.outputs.image_path }}
     timeout-minutes: 5
 
     steps:
-      # checkout code for Dockerfile
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
-          name: app-jar
+          name: litter-jar
 
-      # image repo must be lowercase and GitHub Actions makes this difficult
-      # see: https://github.com/orgs/community/discussions/10553
+      # Image repo must be lowercase and GitHub Actions doesn't have easy string manipulation.
+      #   Was causing issues when username had an uppercase letter
+      #   See: https://github.com/orgs/community/discussions/10553
       - name: Set image path (to lowercase)
         id: image-path
         run: |
@@ -83,7 +86,8 @@ jobs:
           echo "image_path=$imagePath" >> $GITHUB_OUTPUT
           echo "Image path: $imagePath"
 
-      # read version from gradle.properties and append to output so it can be used later
+      # Read version from gradle.properties and append to output.
+      #   This will override the version in the Helm chart to avoid scattering manual version tags
       - name: Read version from gradle.properties
         id: app-version
         run: |
@@ -109,7 +113,7 @@ jobs:
           tags: |
             ${{ steps.app-version.outputs.app_version }}
             ${{ github.sha }}
-          flavor: latest=true
+          flavor: latest=true # this will tag the image with 'latest' as well as SHA and app version
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -120,34 +124,39 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  deploy-to-azure:
+  deploy-to-aks:
     runs-on: ubuntu-latest
-    environment: "Actions Environment"
-    needs:
-      - image-and-push
+    needs: image-and-push
     permissions:
-      actions: read
       contents: read
     timeout-minutes: 15
-
     steps:
-      # checkout code for Helm chart
-      - name: Git checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # determine the deployment environment based on the trigger
-      # if workflow is triggered by a pull request:
+      # Azure login to enable Terraform and Key Vault access
+      - name: Azure login
+        uses: Azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Determine the deployment environment based on the trigger
+      # If workflow is triggered by a pull request:
       #   ... and the base branch is 'main': staging
       #   ... otherwise: dev
-      # if workflow is triggered by manual dispatch:
+      # If workflow is triggered by manual dispatch:
       #   ... use the environment input
-      # the environment determines the Helm values file and the release name to use
-      - name: Determine environment
+      # The environment determines the Helm values file and the release name to use
+      - name: Determine Environment
         id: determine-env
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             if [[ "${{ github.event.pull_request.base.ref }}" == "main" ]]; then
-              environment="staging" else environment="dev"
+              environment="staging"
+            else
+              environment="dev"
             fi
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             environment="${{ github.event.inputs.environment }}"
@@ -155,61 +164,38 @@ jobs:
             echo "Error: Unsupported event '${{ github.event_name }}'."
             exit 1
           fi
-          
+          # Export outputs for use in Terraform commands
           echo "environment=$environment" >> $GITHUB_OUTPUT
           echo "values_file=values.${environment}.yaml" >> $GITHUB_OUTPUT
           echo "release_name=${environment}" >> $GITHUB_OUTPUT
-          echo "namespace=litter-${environment}" >> $GITHUB_OUTPUT
+          echo "Determined environment: $environment"
 
-      - name: Azure login
-        uses: Azure/login@v2
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          terraform_version: 1.10.0
 
-      - name: Get k8s context
-        uses: Azure/aks-set-context@v4
-        with:
-          cluster-name: ${{ env.AZURE_AKS_CLUSTER_NAME }}
-          resource-group: ${{ env.AZURE_AKS_RESOURCE_GROUP }}
+      - name: Terraform init
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        run: terraform init
 
-      - name: Ensure writable chart directory
-        run: chmod 777 chart/
+      - name: Terraform validate
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        run: terraform validate
 
-      # merge values.yaml and the environment-specific values file
-      - name: Merge Helm values with yq
-        id: merge-values
-        uses: mikefarah/yq@master
-        with:
-          cmd: |
-            yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' \
-            chart/values.common.yaml chart/${{ steps.determine-env.outputs.values_file }} > chart/values.yaml
+      - name: Terraform plan
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        id: tf-plan
+        run: |
+          terraform plan \
+            -var-file="${{ env.TERRAFORM_WORKING_DIR }}/example.tfvars" \
+            -var "az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            -var "acme_root_domain=${{ env.ACME_ROOT_DOMAIN }}" \
+            -var "app_image_repo_url=${{ steps.image-path.outputs.image_path }}" \
+            -var "app_image_tag=${{ github.sha }}" \
+            -var "app_environment=${{ steps.determine-env.outputs.environment }}" \
+            -out=tfplan
 
-      - name: Debug merged values file
-        run: cat chart/values.yaml
-
-      # generate manifests using the merged values file
-      - name: Generate manifests with Helm
-        uses: Azure/k8s-bake@v3
-        id: bake
-        with:
-          renderEngine: helm
-          namespace: ${{ steps.determine-env.outputs.namespace }}
-          releaseName: ${{ steps.determine-env.outputs.release_name }}
-          helmChart: ./chart/
-          overrideFiles: ./chart/values.yaml # merged values file
-          overrides: |
-            app.image.repository: ${{ needs.image-and-push.outputs.image_path }}
-            app.image.tag: ${{ github.sha }}
-
-      - name: Validate generated manifests
-        uses: Azure/k8s-lint@v3
-        with:
-          manifests: ${{ steps.bake.outputs.manifestsBundle }}
-
-      - name: Deploy app to AKS
-        uses: Azure/k8s-deploy@v5
-        with:
-          action: deploy
-          namespace: ${{ steps.determine-env.outputs.namespace }}
-          manifests: ${{ steps.bake.outputs.manifestsBundle }}
-          imagepullsecrets: container-registry-secret
+      - name: Terraform apply
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        run: terraform apply -auto-approve tfplan

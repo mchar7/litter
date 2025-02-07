@@ -1,0 +1,50 @@
+[
+  {
+    "_id": {
+      "$oid": "65c1e8384bd9587f9b6bd956"
+    },
+    "producerId": {
+      "$oid": "65c1e20f4bd9587f9b6bd94a"
+    },
+    "subscriberId": {
+      "$oid": "65c1e20f4bd9587f9b6bd94d"
+    },
+    "_class": "org.ac.cst8277.chard.matt.model.Subscription"
+  },
+  {
+    "_id": {
+      "$oid": "65c1e8384bd9587f9b6bd958"
+    },
+    "producerId": {
+      "$oid": "65c1e20f4bd9587f9b6bd94a"
+    },
+    "subscriberId": {
+      "$oid": "65c1e20f4bd9587f9b6bd949"
+    },
+    "_class": "org.ac.cst8277.chard.matt.model.Subscription"
+  },
+  {
+    "_id": {
+      "$oid": "65c1e8384bd9587f9b6bd959"
+    },
+    "producerId": {
+      "$oid": "65c1e20f4bd9587f9b6bd94a"
+    },
+    "subscriberId": {
+      "$oid": "65c1e20f4bd9587f9b6bd94d"
+    },
+    "_class": "org.ac.cst8277.chard.matt.model.Subscription"
+  },
+  {
+    "_id": {
+      "$oid": "668d70e17e2e509cbdfc387b"
+    },
+    "producerId": {
+      "$oid": "65c1e20f4bd9587f9b6bd94d"
+    },
+    "subscriberId": {
+      "$oid": "65c1e20f4bd9587f9b6bd94a"
+    },
+    "_class": "org.ac.cst8277.chard.matt.model.Subscription"
+  }
+]

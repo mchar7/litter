@@ -1,0 +1,200 @@
+= Terraform Deployment Instructions
+:description: Step-by-step guide for deploying the Litter application to Azure using Terraform and AKS
+:keywords: terraform, azure, kubernetes, aks, infrastructure-as-code
+:toc: preamble
+:icons: font
+:source-highlighter: rouge
+:sectlinks:
+:sectanchors:
+:nofooter:
+
+[.lead]
+Below are the steps to deploy this project onto Azure using Terraform.
+
+[IMPORTANT]
+====
+.Prerequisites
+[.prerequisites]
+* [x] Unix-based terminal (Linux, macOS, WSL, etc.)
+* [x] Terraform link:https://learn.hashicorp.com/tutorials/terraform/install-cli[installed]
+* [x] Azure CLI link:https://learn.microsoft.com/en-us/cli/azure/install-azure-cli[installed] and logged in
+* [x] Azure account and subscription
+* [x] Domain name and access to its DNS records (for HTTPS)
+** If your domain is with Namecheap:
+*** You'll need to request API access from Namecheap.
+They have certain requirements for this.
+** If your domain is with another registrar:
+*** This Terraform setup is configured for Namecheap.
+You'll need to modify it for another registrar.
+* [x] Docker image repository (e.g., Docker Hub, Azure Container Registry, etc.) for the app, with the image pushed
+====
+
+== 1. link:https://learn.microsoft.com/en-us/azure/key-vault/secrets/quick-create-cli[Set up your Key Vault]
+
+Set environment variables in your terminal for the key vault and its resource group's names, as well as the Azure location:
+
+[source,bash]
+----
+KV_NAME="litter-kv"
+KV_RESOURCE_GROUP="litter-kv-rg"
+KV_LOCATION="EastUS"
+----
+
+Create a resource group (separate from the AKS cluster):
+
+[source,bash]
+----
+az group create --name $KV_RESOURCE_GROUP --location $KV_LOCATION
+----
+
+Create your key vault:
+
+[source,bash]
+----
+az keyvault create --name $KV_NAME --resource-group $KV_RESOURCE_GROUP --location $KV_LOCATION
+----
+
+Since the vault is created with RBAC enabled, grant your current (signed‑in) user full read/write access using the *Key Vault Secrets Officer* role:
+
+[source,bash]
+----
+CURRENT_USER_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv)
+KEYVAULT_ID=$(az keyvault show --name $KV_NAME --resource-group $KV_RESOURCE_GROUP --query id -o tsv)
+az role assignment create --assignee $CURRENT_USER_OBJECT_ID --role "Key Vault Secrets Officer" --scope $KEYVAULT_ID
+----
+
+== 2. Set the required secrets
+
+This Terraform setup pulls sensitive values (such as credentials and application secrets) from your Azure Key Vault.
+
+Make sure you set them with the following secret names:
+
+.Example secret configuration commands
+[source,bash]
+----
+az keyvault secret set --vault-name $KV_NAME --name "db-user-username"  --value "<mongo-username>"
+az keyvault secret set --vault-name $KV_NAME --name "db-user-password"  --value "<mongo-password>"
+az keyvault secret set --vault-name $KV_NAME --name "jwt-secret" --value "<jwt-secret>"
+az keyvault secret set --vault-name $KV_NAME --name "acme-email" --value "<your-email@example.com>"
+----
+
+[NOTE]
+====
+If you have a private container registry, create a link:https://docs.docker.com/reference/cli/docker/login/#credential-stores[Docker config JSON] and store it as a Key Vault secret:
+
+[source,bash]
+----
+az keyvault secret set --vault-name $KV_NAME --name "docker-cfg" --file "<your-docker.json>"
+----
+
+You do not need to do this if your Litter image is hosted on a publicly-accessible registry.
+
+====
+
+Assuming you're using Namecheap for domain records, add your registrar credentials:
+
+[source,bash]
+----
+az keyvault secret set --vault-name $KV_NAME --name "registrar-username"  --value "<username>"
+az keyvault secret set --vault-name $KV_NAME --name "registrar-api-user"  --value "<api-user>"
+az keyvault secret set --vault-name $KV_NAME --name "registrar-api-key"   --value "<api-key>"
+az keyvault secret set --vault-name $KV_NAME --name "registrar-client-ip" --value "<client-ip>"
+----
+
+[CAUTION]
+====
+Your registrar credentials are very powerful and can be used to modify any domains in your account (this is true for Namecheap, at least).
+====
+
+== 3. Create Your .tfvars file
+
+This Terraform setup relies on variables; review and edit the sample provided in `example.tfvars`.
+Copy it to a new file (e.g., `litter.tfvars`), and fill in your details.
+
+The Terraform configuration deploys to a single environment.
+Set the "environment" variable in the tfvars file to your target environment (e.g., dev, staging, prod).
+If you change this value often, you can override it at the command line with `-var="environment=dev"`.
+This should be placed after the `-var-file="litter.tfvars"` argument so that it takes precedence.
+
+.Click to show `-var` override example
+[%collapsible]
+====
+[source,bash]
+----
+terraform apply -var-file="litter.tfvars" -var="environment=dev"
+----
+====
+
+If you don't use Namecheap, you will need to remove and replace the `namecheap_domain_records` resource in the Terraform files with your own implementation for your domain registrar.
+
+[NOTE]
+====
+The `example.tfvars` is pre-configured with some resource values that allowed me to run the AKS cluster as cheaply as possible.
+
+You'll probably want to adjust these values higher if you actually expect the site to receive any significant traffic and/or want redundancy or scalable load handling.
+====
+
+== 4. Deploy Your Infrastructure
+
+From the `./terraform` directory, initialize and apply:
+
+[source,bash]
+----
+cd terraform
+terraform init
+terraform apply -var-file="litter.tfvars" # or whatever you named your .tfvars file
+----
+
+Terraform will show you a plan of what it's going to create or update.
+Confirm by typing `yes`, and then let it do its thing.
+
+Once complete, Terraform will have provisioned:
+
+1. An AKS cluster (with the specified number of nodes, load balancer, etc.)
+2. A namespace, secret(s), database storage, and a Helm chart deployment of the Litter app & database
+3. An ingress controller, public IP, and DNS records with Namecheap
+4. A Key Vault-based secret retrieval flow
+
+== 5. (Optional) Create a CI/CD service principal for read‑only access
+
+If you will be running this Terraform plan as part of a CI/CD pipeline, it will only need to read secrets.
+We can create a separate service principal and assign it the *Key Vault Secrets User* role (read‑only access).
+
+.Click to expand read-only service principal creation commands
+[%collapsible]
+====
+Run the following commands:
+
+[source,bash]
+----
+# choose a name for your CI/CD service principal:
+CI_SP_NAME="ci-readonly-sp"
+
+# create the service principal without any default role assignments.
+# capture the full JSON output (which includes your App ID, password, and tenant).
+CI_SP_OUTPUT=$(az ad sp create-for-rbac --name "$CI_SP_NAME" --skip-assignment --output json)
+echo "Service Principal credentials (store these securely):"
+echo "$CI_SP_OUTPUT"
+
+# extract the App ID using sed
+CI_SP_APP_ID=$(echo "$CI_SP_OUTPUT" | sed -n 's/.*"appId": *"\([^"]*\)".*/\1/p')
+
+# retrieve the service principal's object ID
+CI_SP_OBJECT_ID=$(az ad sp show --id $CI_SP_APP_ID --query id -o tsv)
+
+# assign the read‑only "Key Vault Secrets User" role to the service principal for your key vault
+az role assignment create --assignee $CI_SP_OBJECT_ID --role "Key Vault Secrets User" --scope $KEYVAULT_ID
+----
+====
+
+== That's It!
+
+You should now have a running Kubernetes cluster with the Litter app deployed.
+You should be able to access it over HTTPS via `(environment name)`.`(root domain)`.`(your domain)`.`(tld)`.
+
+[WARNING]
+====
+Keep your secrets safe.
+If you fork this repository, remember not to commit any sensitive data.
+Also, store your `.tfvars` file securely or add it to `.gitignore`.
+====
