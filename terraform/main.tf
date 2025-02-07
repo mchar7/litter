@@ -261,6 +261,11 @@ resource "helm_release" "litter" {
     name  = "app.image.tag"
     value = var.app_image_tag
   }
+  set {
+    name  = "app.env.MONGO_DB"
+    value = var.mongo_db_name
+  }
+
   depends_on = [
     module.cert_manager,
     helm_release.nginx_ingress,
@@ -325,10 +330,6 @@ resource "kubernetes_job" "mongo_restore_job" {
               }
             }
           }
-          env {
-            name  = "MONGO_DB_NAME"
-            value = var.mongo_db_name
-          }
           args = [
             <<-EOF
               # wait for MongoDB to be ready
@@ -339,7 +340,7 @@ resource "kubernetes_job" "mongo_restore_job" {
 
               # check if the target database already has data (unless overwrite is forced)
               if [ "${var.mongo_overwrite_existing_db}" != "true" ]; then
-                COUNT=$(mongosh --host ${var.app_name}-db --eval "db.getSiblingDB('$MONGO_DB_NAME').getCollectionNames().length" --quiet)
+                COUNT=$(mongosh --host ${var.app_name}-db --eval "db.getSiblingDB('${var.mongo_db_name}').getCollectionNames().length" --quiet)
                 if [ "$COUNT" -gt 0 ]; then
                   echo "Database already contains data. Skipping restore."
                   exit 0
@@ -347,19 +348,19 @@ resource "kubernetes_job" "mongo_restore_job" {
               fi
 
               echo "Starting MongoDB collections import..."
-              mongoimport --host ${var.app_name}-db --db $MONGO_DB_NAME --collection users --file /workspace/litter_sample_users.json --jsonArray
-              mongoimport --host ${var.app_name}-db --db $MONGO_DB_NAME --collection messages --file /workspace/litter_sample_messages.json --jsonArray
-              mongoimport --host ${var.app_name}-db --db $MONGO_DB_NAME --collection subscriptions --file /workspace/litter_sample_subscriptions.json --jsonArray
+              mongoimport --host ${var.app_name}-db --db ${var.mongo_db_name} --collection users --file /workspace/litter_sample_users.json --jsonArray
+              mongoimport --host ${var.app_name}-db --db ${var.mongo_db_name} --collection messages --file /workspace/litter_sample_messages.json --jsonArray
+              mongoimport --host ${var.app_name}-db --db ${var.mongo_db_name} --collection subscriptions --file /workspace/litter_sample_subscriptions.json --jsonArray
               echo "MongoDB collections imported successfully"
 
               # create the application database user as defined in the secrets
               echo "Creating database user..."
               mongosh --host ${var.app_name}-db --eval "
-                db = db.getSiblingDB('$MONGO_DB_NAME');
+                db = db.getSiblingDB('${var.mongo_db_name}');
                 db.createUser({
                   user: '$MONGO_APP_USERNAME',
                   pwd: '$MONGO_APP_PASSWORD',
-                  roles: [{ role: 'readWrite', db: '$MONGO_DB_NAME' }]}
+                  roles: [{ role: 'readWrite', db: '${var.mongo_db_name}' }]}
               );"
               echo "Database user created successfully"
             EOF
