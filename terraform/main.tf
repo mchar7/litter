@@ -190,6 +190,7 @@ module "cert_manager" {
     }
   }
   depends_on = [
+    kubernetes_namespace.env,
     helm_release.nginx_ingress,
     azurerm_dns_a_record.litter_dns,
   ]
