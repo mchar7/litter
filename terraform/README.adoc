@@ -29,7 +29,35 @@ You'll need to modify it for another registrar.
 * [x] Docker image repository (e.g., Docker Hub, Azure Container Registry, etc.) for the app, with the image pushed
 ====
 
-== 1. link:https://learn.microsoft.com/en-us/azure/key-vault/secrets/quick-create-cli[Set up your Key Vault]
+== Before You Begin
+
+Before running Terraform, note that the backend configuration for remote state management is hard-coded in the file `./terraform/backend.tf`.
+You'll have to review and update these settings to match your environment.
+Removing the backend block will cause Terraform to default to using a local state file, so if you prefer to maintain your Terraform state locally you can just remove `/terraform/backend.tf`.
+
+.Click to see example Azure CLI commands for setting up remote backend resources
+[%collapsible]
+====
+[source,bash]
+----
+# Create the resource group for your Terraform state backend
+az group create --name litter-state-rg --location EastUS
+
+# Create the storage account for storing the Terraform state file
+az storage account create \
+  --name litterstateacct \
+  --resource-group litter-state-rg \
+  --location EastUS \
+  --sku Standard_LRS
+
+# Create the blob container for storing the Terraform state file
+az storage container create \
+  --account-name litterstateacct \
+  --name tfstate
+----
+====
+
+== Step 1: link:https://learn.microsoft.com/en-us/azure/key-vault/secrets/quick-create-cli[Set up your Key Vault]
 
 Set environment variables in your terminal for the key vault and its resource group's names, as well as the Azure location:
 
@@ -63,7 +91,7 @@ KEYVAULT_ID=$(az keyvault show --name $KV_NAME --resource-group $KV_RESOURCE_GRO
 az role assignment create --assignee $CURRENT_USER_OBJECT_ID --role "Key Vault Secrets Officer" --scope $KEYVAULT_ID
 ----
 
-== 2. Set the required secrets
+== Step 2: Set the required secrets
 
 This Terraform setup pulls sensitive values (such as credentials and application secrets) from your Azure Key Vault.
 
@@ -106,7 +134,7 @@ az keyvault secret set --vault-name $KV_NAME --name "registrar-client-ip" --valu
 Your registrar credentials are very powerful and can be used to modify any domains in your account (this is true for Namecheap, at least).
 ====
 
-== 3. Create Your .tfvars file
+== Step 3: Create Your .tfvars file
 
 This Terraform setup relies on variables; review and edit the sample provided in `example.tfvars`.
 Copy it to a new file (e.g., `litter.tfvars`), and fill in your details.
@@ -134,7 +162,7 @@ The `example.tfvars` is pre-configured with some resource values that allowed me
 You'll probably want to adjust these values higher if you actually expect the site to receive any significant traffic and/or want redundancy or scalable load handling.
 ====
 
-== 4. Deploy Your Infrastructure
+== Step 4: Deploy Your Infrastructure
 
 From the `./terraform` directory, initialize and apply:
 
@@ -155,7 +183,7 @@ Once complete, Terraform will have provisioned:
 3. An ingress controller, public IP, and DNS records with Namecheap
 4. A Key Vault-based secret retrieval flow
 
-== 5. (Optional) Create a CI/CD service principal for read‑only access
+== Step 5: (Optional) Create a CI/CD service principal for read‑only access
 
 If you will be running this Terraform plan as part of a CI/CD pipeline, it will only need to read secrets.
 We can create a separate service principal and assign it the *Key Vault Secrets User* role (read‑only access).
@@ -183,9 +211,30 @@ CI_SP_APP_ID=$(echo "$CI_SP_OUTPUT" | sed -n 's/.*"appId": *"\([^"]*\)".*/\1/p')
 CI_SP_OBJECT_ID=$(az ad sp show --id $CI_SP_APP_ID --query id -o tsv)
 
 # assign the read‑only "Key Vault Secrets User" role to the service principal for your key vault
-az role assignment create --assignee $CI_SP_OBJECT_ID --role "Key Vault Secrets User" --scope $KEYVAULT_ID
+az role assignment create --assignee $CI_SP_OBJECT_ID --role "Key Vault Reader" --scope $KEYVAULT_ID
 ----
 ====
+
+[NOTE]
+========
+If your CI/CD pipeline will be using a remote state (like the Azure-based one that this repository is pre-configured for), you'll need to set up the service principal with the appropriate permissions to access the remote state.
+
+.Click to show example state access permission grant
+[%collapsible]
+====
+__(note: the below commands assume you are continuing from the previous section)__
+
+[source,bash]
+----
+# retrieve the resource ID of the storage account where your Terraform state is stored
+STORAGE_ACCT_RG="litter-state-rg"
+STORAGE_ACCT_NAME="litterstateacct"
+
+TFSTATE_ID=$(az storage account show --name $STORAGE_ACCT_NAME --resource-group $STORAGE_ACCT_RG --query id -o tsv)
+az role assignment create --assignee $CI_SP_OBJECT_ID --role "Storage Blob Data Contributor" --scope $TFSTATE_ID
+----
+====
+========
 
 == That's It!
 
@@ -194,6 +243,7 @@ You should be able to access it over HTTPS via `(environment name)`.`(root domai
 
 [WARNING]
 ====
+
 Keep your secrets safe.
 If you fork this repository, remember not to commit any sensitive data.
 Also, store your `.tfvars` file securely or add it to `.gitignore`.
