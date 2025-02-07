@@ -4,7 +4,6 @@ permissions:
 env:
   REGISTRY: ghcr.io
   ACME_ROOT_DOMAIN: "litter.dev"
-  TERRAFORM_WORKING_DIR: ./terraform
   AZURE_AKS_CLUSTER_NAME: litter-k8s-cluster
   AZURE_AKS_RESOURCE_GROUP: litter-k8s
 on:
@@ -124,6 +123,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: image-and-push
     timeout-minutes: 15
+    env:
+      TERRAFORM_WORKING_DIR: ./terraform
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -185,7 +186,7 @@ jobs:
         id: tf-plan
         run: |
           terraform plan \
-            -var-file="${{ env.TERRAFORM_WORKING_DIR }}/example.tfvars" \
+            -var-file="example.tfvars" \
             -var "az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var "acme_root_domain=${{ env.ACME_ROOT_DOMAIN }}" \
             -var "app_image_repo_url=${{ steps.image-path.outputs.image_path }}" \
