@@ -126,7 +126,7 @@ flowchart TB
  subgraph db_subgraph["Database Tier"]
         MDB["MongoDB Pod"]
         PV["Persistent Volume"]
-        CAT@{ img: "res/img/catinlitterbox.svg", h: 100, w: 100, pos: "b"}
+        CAT@{ img: "https://github.com/mchar7/litter/raw/refs/heads/deployment-refactor/res/img/catinlitterbox.svg", h: 100, w: 100, pos: "b"}
 
   end
  subgraph res_subgraph["Kubernetes Resources"]
