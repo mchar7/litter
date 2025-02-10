@@ -31,6 +31,23 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 }
 
+resource "azurerm_public_ip" "litter_ip" {
+  name                = "${var.app_name}-ip"
+  sku                 = "Basic"
+  allocation_method   = "Static"
+  location            = azurerm_kubernetes_cluster.aks.location
+  resource_group_name = azurerm_kubernetes_cluster.aks.node_resource_group
+}
+
+# create/adjust the DNS A record to point to the app's public IP
+resource "azurerm_dns_a_record" "litter_dns" {
+  name                = var.app_environment
+  zone_name           = var.az_dns_zone_name
+  resource_group_name = var.az_dns_rg
+  ttl = 300 # keep low for rapid testing/iteration
+  records = [azurerm_public_ip.litter_ip.ip_address]
+}
+
 ############################################################
 # HELM: NGINX INGRESS CONTROLLER
 ############################################################
@@ -147,25 +164,8 @@ resource "kubernetes_persistent_volume_claim" "mongo_db_pvc" {
 }
 
 ############################################################
-# NETWORKING: PUBLIC IP, DNS, ACME, INGRESS, TLS
+# TLS: Cert-Manager & Ingress
 ############################################################
-resource "azurerm_public_ip" "litter_ip" {
-  name                = "${var.app_name}-ip"
-  sku                 = "Basic"
-  allocation_method   = "Static"
-  location            = azurerm_kubernetes_cluster.aks.location
-  resource_group_name = azurerm_kubernetes_cluster.aks.node_resource_group
-}
-
-# create/adjust the DNS A record to point to the app's public IP
-resource "azurerm_dns_a_record" "litter_dns" {
-  name                = var.app_environment
-  zone_name           = var.az_dns_zone_name
-  resource_group_name = var.az_dns_rg
-  ttl = 300 # keep low for rapid testing/iteration
-  records = [azurerm_public_ip.litter_ip.ip_address]
-}
-
 # create all the Cert-Manager related resources
 module "cert_manager" {
   source                                 = "terraform-iaac/cert-manager/kubernetes"
@@ -196,13 +196,14 @@ module "cert_manager" {
   ]
 }
 
+# ingress for application traffic (enforce HTTPS)
 resource "kubernetes_ingress_v1" "litter_ingress" {
   metadata {
     name      = "${var.app_name}-ingress-${var.app_environment}"
     namespace = "${var.app_name}-${var.app_environment}"
     annotations = {
-      "cert-manager.io/cluster-issuer"            = module.cert_manager.cluster_issuer_name
-      "acme.cert-manager.io/http01-edit-in-place" = "true"
+      "cert-manager.io/cluster-issuer"           = module.cert_manager.cluster_issuer_name
+      "nginx.ingress.kubernetes.io/ssl-redirect" = "true"
     }
   }
   spec {
