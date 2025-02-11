@@ -192,6 +192,7 @@ module "cert_manager" {
   depends_on = [
     kubernetes_namespace.env,
     helm_release.nginx_ingress,
+    kubernetes_ingress_v1.litter_ingress,
     azurerm_dns_a_record.litter_dns,
   ]
 }
@@ -202,7 +203,6 @@ resource "kubernetes_ingress_v1" "litter_ingress" {
     name      = "${var.app_name}-ingress-${var.app_environment}"
     namespace = "${var.app_name}-${var.app_environment}"
     annotations = {
-      "cert-manager.io/cluster-issuer"           = module.cert_manager.cluster_issuer_name
       "nginx.ingress.kubernetes.io/ssl-redirect" = "true"
     }
   }
@@ -215,6 +215,8 @@ resource "kubernetes_ingress_v1" "litter_ingress" {
     rule {
       host = "${var.app_environment}.${var.az_dns_zone_name}"
       http {
+        # This regex uses a negative lookahead to exclude any path starting with
+        # "/.well-known/acme-challenge" so that those requests won’t be routed to your app.
         path {
           path      = "/"
           path_type = "Prefix"
@@ -232,7 +234,7 @@ resource "kubernetes_ingress_v1" "litter_ingress" {
   }
   wait_for_load_balancer = true
   depends_on = [
-    module.cert_manager,
+    helm_release.nginx_ingress,
     helm_release.litter,
     azurerm_dns_a_record.litter_dns
   ]
@@ -268,7 +270,6 @@ resource "helm_release" "litter" {
   }
 
   depends_on = [
-    module.cert_manager,
     helm_release.nginx_ingress,
     kubernetes_service_account.db_sa,
     kubernetes_service_account.app_sa,
