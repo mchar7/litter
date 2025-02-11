@@ -169,6 +169,35 @@ resource "kubernetes_persistent_volume_claim" "mongo_db_pvc" {
 ############################################################
 # TLS: Cert-Manager & Ingress
 ############################################################
+# dynamic wait using a provisioner to repeatedly check DNS propagation success
+resource "null_resource" "wait_for_dns" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      #!/bin/bash
+      TARGET="${var.app_environment}.${var.az_dns_zone_name}"
+      EXPECTED="${azurerm_public_ip.litter_ip.ip_address}"
+      TIMEOUT=600 # maximum total wait time (in seconds)
+      INTERVAL=30 # time between checks (in seconds)
+      ELAPSED=0
+      echo "Waiting for DNS record $TARGET to propagate to $EXPECTED..."
+      while [ $ELAPSED -lt $TIMEOUT ]; do
+        RESOLVED=$(dig +short $TARGET | tr -d '[:space:]')
+        if [ "$RESOLVED" = "$EXPECTED" ]; then
+          echo "DNS propagation complete: $RESOLVED matches expected IP."
+          exit 0
+        fi
+        echo "DNS not yet propagated. Resolved to '$RESOLVED', expected '$EXPECTED'. Sleeping for $INTERVAL s..."
+        sleep $INTERVAL
+        ELAPSED=$((ELAPSED + INTERVAL))
+      done
+      echo "Timeout ($TIMEOUT s) reached without successful DNS propagation. Womp womp."
+      exit 1
+    EOT
+    interpreter = ["/bin/bash", "-c"]
+  }
+  depends_on = [azurerm_dns_a_record.litter_dns]
+}
+
 # create all the Cert-Manager related resources
 module "cert_manager" {
   source                                 = "terraform-iaac/cert-manager/kubernetes"
@@ -231,9 +260,12 @@ resource "kubernetes_ingress_v1" "acme_challenge_ingress" {
       }
     }
   }
-  depends_on = [kubernetes_namespace.env]
+  depends_on = [
+    module.cert_manager,
+    helm_release.litter,
+    azurerm_dns_a_record.litter_dns
+  ]
 }
-
 
 # ingress for application traffic (enforce HTTPS)
 resource "kubernetes_ingress_v1" "litter_ingress" {
