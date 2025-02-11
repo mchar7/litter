@@ -199,13 +199,48 @@ module "cert_manager" {
   ]
 }
 
+# ingress for the ACME challenge to a dummy service
+# (this is required for the ACME challenge to work)
+resource "kubernetes_ingress_v1" "acme_challenge_ingress" {
+  metadata {
+    name      = "${var.app_name}-acme-challenge-ingress"
+    namespace = "${var.app_name}-${var.app_environment}"
+    annotations = {
+      "cert-manager.io/cluster-issuer"            = module.cert_manager.cluster_issuer_name
+      "acme.cert-manager.io/http01-edit-in-place" = "true"
+      "nginx.ingress.kubernetes.io/ssl-redirect"  = "false"
+    }
+  }
+  spec {
+    ingress_class_name = "nginx"
+    rule {
+      host = "${var.app_environment}.${var.az_dns_zone_name}"
+      http {
+        path {
+          path      = "/.well-known/acme-challenge"
+          path_type = "ImplementationSpecific"
+          backend {
+            service {
+              name = "dummy-service"
+              port {
+                number = 80
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  depends_on = [kubernetes_namespace.env]
+}
+
+
 # ingress for application traffic (enforce HTTPS)
 resource "kubernetes_ingress_v1" "litter_ingress" {
   metadata {
     name      = "${var.app_name}-ingress-${var.app_environment}"
     namespace = "${var.app_name}-${var.app_environment}"
     annotations = {
-      "cert-manager.io/cluster-issuer"           = module.cert_manager.cluster_issuer_name
       "nginx.ingress.kubernetes.io/ssl-redirect" = "true"
     }
   }
