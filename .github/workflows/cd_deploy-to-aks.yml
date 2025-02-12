@@ -1,0 +1,201 @@
+name: CD - Deploy to AKS
+permissions:
+  contents: read
+env:
+  ROOT_DOMAIN: "litter.dev"
+on:
+  # Trigger deployment after successful CI run
+  workflow_run:
+    workflows: [ "CI - Build, Test, Push" ]
+    types:
+      - completed
+  # Allow manual trigger of workflow to deploy to specified environment
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        required: true
+        description: "Deployment environment"
+        options:
+          - "dev"
+          - "staging"
+          - "prod"
+      acme_provider_name:
+        type: choice
+        required: true
+        description: "ACME provider"
+        default: "Let's Encrypt - Production"
+        options:
+          - "Let's Encrypt - Production"  # Ideal when deploying to publicly accessible domain
+          - "Let's Encrypt - Staging"     # Ideal when frequently testing deployment (avoid rate limits on prod server)
+
+jobs:
+  # If triggered by a workflow_run, ensure the CI was successful. If not, skip deployment
+  check-context:
+    if: ${{ github.event.event_name == 'workflow_run' }}
+    runs-on: ubuntu-latest
+    outputs:
+      is_main_pr: ${{ steps.check-if-pr.outputs.is_main_pr }}
+    steps:
+      - name: Check if CI was successful
+        run: |
+          if [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
+              echo "CI was successful"
+          else
+              echo "CI failed; skipping deployment"; exit 1
+          fi
+
+      - name: Check if PR to main
+        run: |
+          if [[ "${{ github.event.workflow_run.event_name }}" == "pull_request" ]]; then
+            if [[ "${{ github.event.workflow_run.event.pull_request.base.ref }}" == "main" ]]; then
+              isMainPR=true
+              echo is_main_pr=$isMainPR >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  prepare-deployment:
+    runs-on: ubuntu-latest
+    outputs:
+      image_path: ${{ steps.image-path.outputs.image_path }}
+      environment_name: ${{ steps.determine-env-name.outputs.environment_name }}
+      environment_url: ${{ steps.determine-env-url.outputs.environment_url }}
+      acme_provider_url: ${{ steps.determine-acme-url.outputs.acme_provider_url }}
+    steps:
+      # Image repo must be lowercase and GitHub Actions doesn't have easy string manipulation.
+      #   Was causing issues when username had an uppercase letter
+      #   See: https://github.com/orgs/community/discussions/10553
+      - name: Set image path (to lowercase)
+        id: image-path
+        run: |
+          imagePath="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "image_path=$imagePath" >> $GITHUB_OUTPUT
+          echo "Image path: $imagePath"
+
+      # Determine the deployment environment based on the trigger
+      # If this workflow is triggered by a workflow_run:
+      #   ... and the CI workflow was triggered by a pull request event:
+      #       ... and the base branch is 'main': deploy to staging
+      #   ... otherwise: deploy to dev
+      # If this workflow is triggered by manual dispatch:
+      #   ... use the given input
+      # The environment determines the Helm values file and the release name to use
+      - name: Determine Environment
+        id: determine-env-name
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            environmentName="${{ github.event.inputs.environment }}"
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            # extract base branch from the CI's original pull request event
+            CI_TRIGGER_EVENT="${{ github.event.workflow_run.event_name }}"
+            if [[ "$CI_TRIGGER_EVENT" == "pull_request" ]]; then
+              BASE_BRANCH="${{ github.event.workflow_run.event.pull_request.base.ref }}"
+              environmentName="$([[ "$BASE_BRANCH" == "main" ]] && echo "staging" || echo "dev")"
+            else
+              environmentName="dev" # default to "dev" if CI was triggered manually
+            fi
+          else
+            echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
+          fi
+          echo "environment_name=$environmentName" >> $GITHUB_OUTPUT
+
+      # Determine the deployment's URL (e.g. prod.litter.dev, where prod = environment_name and litter.dev = ROOT_DOMAIN)
+      - name: Determine Environment URL
+        id: determine-env-url
+        run: |
+          echo "environment_url=${{ steps.determine-env-name.outputs.environment_name }}.${{ env.ROOT_DOMAIN }}" >> $GITHUB_OUTPUT
+
+      # Given the human-readable ACME provider choices for manual dispatch, determine the ACME server URL
+      #   Default to Let's Encrypt's production server for PR-triggered deployments to main, else default to staging
+      - name: Determine ACME Server URL
+        id: determine-acme-url
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ github.event.inputs.acme_provider_name }}" == "Let's Encrypt - Production" ]]; then
+              acmeProviderURL="https://acme-v02.api.letsencrypt.org/directory"
+            elif [[ "${{ github.event.inputs.acme_provider_name }}" == "Let's Encrypt - Staging" ]]; then
+              acmeProviderURL="https://acme-staging-v02.api.letsencrypt.org/directory"
+            else
+              echo "Error: Unsupported ACME provider '${{ github.event.inputs.acme_provider_name }}'."; exit 1
+            fi
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            if [[ ${{ steps.determine-env-name.outputs.environment_name }} == "prod" ]]; then
+              acmeProviderURL="https://acme-v02.api.letsencrypt.org/directory"
+            else
+              acmeProviderURL="https://acme-staging-v02.api.letsencrypt.org/directory"
+            fi
+          else
+            echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
+          fi
+          echo "acme_provider_url=$acmeProviderURL" >> $GITHUB_OUTPUT
+
+  deploy-to-aks:
+    needs: prepare-deployment
+    runs-on: ubuntu-latest
+    env:
+      # Azure credentials (cannot use azure/login action with service principal)
+      #   See: https://github.com/hashicorp/terraform-provider-azurerm/issues/22034
+      ARM_USE_OIDC: true
+      TERRAFORM_WORKING_DIR: "./terraform"
+    environment:
+      name: ${{ needs.prepare-deployment.outputs.environment_name }}
+      url: ${{ needs.prepare-deployment.outputs.environment_url }}
+    permissions: # Extra id-token permission needed to deploy to Azure using OIDC
+      id-token: write
+      contents: read
+    timeout-minutes: 25 # This can take a WHILE, especially on first deployment, especially with cheap node SKUs
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.10.0"
+
+      - name: Terraform init
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        run: terraform init
+
+      - name: Terraform validate
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        run: terraform validate
+
+      - name: Terraform plan
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        id: tf-plan
+        run: | # For app image tag, use head sha if PR, else use commit sha
+          terraform plan \
+            -var-file="example.tfvars" \
+            -var "az_dns_rg           = ${{ vars.AZ_DNS_RG }}" \
+            -var "az_dns_zone_name    = ${{ vars.AZ_DNS_ZONE_NAME }}" \
+            -var "az_subscription_id  = ${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            -var "acme_provider_url   = ${{ needs.prepare-deployment.outputs.acme_provider_url }}" \
+            -var "app_environment     = ${{ needs.prepare-deployment.outputs.environment_name }}" \
+            -var "app_image_repo_url  = ${{ needs.prepare-deployment.outputs.image_path }}" \
+            -var "app_image_tag       = ${{ github.event.workflow_run.head_sha || github.sha }}"
+            -out=tfplan
+
+      - name: Terraform apply
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        run: terraform apply -auto-approve tfplan
+
+  report-pr-status:
+    needs: [ prepare-deployment, deploy-to-aks ]
+    runs-on: ubuntu-latest
+    if: ${{ always() && github.event.workflow_run.event == 'pull_request' }} # Only report status for PRs (run job even if prev jobs fail)
+    steps:
+      - name: Update PR status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const conclusion = '${{ needs.deploy-to-aks.result || 'failure' }}' === 'success' ? 'success' : 'failure';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: '${{ github.event.workflow_run.head_sha }}',
+              state: conclusion,
+              context: 'CD - Deploy to AKS',
+              description: conclusion === 'success' ? 'Staging deployment successful' : 'Deployment failed',
+              target_url: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            });

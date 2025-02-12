@@ -1,0 +1,119 @@
+name: CI - Build, Test, Push
+permissions:
+  contents: read
+on:
+  # On pull request to 'main' branch, deploy to 'staging' k8s environment
+  #   to further test the app. Once manually approved, the app is deployed to 'prod'
+  pull_request:
+    branches:
+      - main
+  # Allow manual trigger of workflow to build and push image
+  workflow_dispatch: { }
+
+jobs:
+  # Build the app with Gradle, generating test reports and (if successful) a JAR artifact
+  build-with-gradle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Use pull request head ref if triggered by a pull request, otherwise use current ref
+          ref: ${{ github.event.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref }}
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'corretto'
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # Try out the Develocity Build Scans feature
+          build-scan-publish: true
+          build-scan-terms-of-use-url: "https://gradle.com/terms-of-service"
+          build-scan-terms-of-use-agree: "yes"
+
+      - name: Execute Gradle build (with tests)
+        run: ./gradlew build
+
+      # Save the built JAR as an artifact for Docker image creation
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: litter-jar
+          path: build/libs/litter.jar
+          if-no-files-found: error
+
+  # If build (& tests) successful, build Docker image and push to container registry
+  image-and-push:
+    runs-on: ubuntu-latest
+    needs:
+      - build-with-gradle
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 5
+    outputs:
+      image_path: ${{ steps.image-path.outputs.image_path }}
+      image_tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: litter-jar
+          path: build/libs # Download to the same directory as the Gradle build for consistency
+
+      # Image repo must be lowercase and GitHub Actions doesn't have easy string manipulation.
+      #   Was causing issues when username had an uppercase letter
+      #   See: https://github.com/orgs/community/discussions/10553
+      - name: Set image path (to lowercase)
+        id: image-path
+        run: |
+          imagePath="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "image_path=$imagePath" >> $GITHUB_OUTPUT
+          echo "Image path: $imagePath"
+
+      # Read version from gradle.properties and append to output.
+      #   This will override the version in the Helm chart to avoid scattering manual version tags
+      - name: Read version from gradle.properties
+        id: app-version
+        run: |
+          set -euo pipefail # fail on error, unset variables, or pipe fails
+          version=$(grep "^version=" gradle.properties | cut -d'=' -f2 | tr -d '[:space:]')
+          if [ -z "$version" ]; then
+            echo "Error: Version not found in gradle.properties"; exit 1
+          fi
+          echo "app_version=$version" >> $GITHUB_OUTPUT
+
+      - name: Log into registry
+        uses: docker/login-action@v3
+        with:
+          registry: "ghcr.io"
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ steps.image-path.outputs.image_path }}
+          tags: |
+            ${{ steps.app-version.outputs.app_version }}
+            ${{ github.sha }}
+          flavor: latest=true # This will tag the image with 'latest' as well as SHA and app version
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

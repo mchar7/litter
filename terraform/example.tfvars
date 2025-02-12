@@ -33,7 +33,7 @@ mongo_overwrite_existing_db = false
 mongo_sample_collections_dir = "./resources/sample_data"
 
 # ACME and domain configuration
-acme_server = "https://acme-v02.api.letsencrypt.org/directory" # Let's Encrypt production server
+acme_provider_url = "https://acme-v02.api.letsencrypt.org/directory" # Let's Encrypt production server
 # acme_server = "https://acme-staging-v02.api.letsencrypt.org/directory" # staging server
 
 # key vault configuration (all sensitive secrets are stored in the KV)

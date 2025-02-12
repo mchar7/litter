@@ -161,7 +161,7 @@ variable "az_dns_zone_name" {
   default     = "litter.dev"
 }
 
-variable "acme_server" {
+variable "acme_provider_url" {
   type        = string
   description = "ACME server URL"
   default     = "https://acme-v02.api.letsencrypt.org/directory" # can switch to staging for testing

@@ -204,7 +204,7 @@ module "cert_manager" {
   source                                 = "terraform-iaac/cert-manager/kubernetes"
   cluster_issuer_email                   = data.azurerm_key_vault_secret.kv_acme_email.value
   cluster_issuer_name                    = "${var.app_name}-cluster-issuer"
-  cluster_issuer_server                  = var.acme_server
+  cluster_issuer_server                  = var.acme_provider_url
   cluster_issuer_private_key_secret_name = "${var.app_name}-acme-key"
   solvers = [
     {
