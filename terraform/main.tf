@@ -251,7 +251,7 @@ module "cert_manager" {
     }
   }
   depends_on = [
-    azurerm_kubernetes_cluster.aks,
+    helm_release.nginx_ingress,
     azurerm_federated_identity_credential.cert_manager_federated
   ]
 }
