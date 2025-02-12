@@ -7,10 +7,14 @@ resource "azurerm_resource_group" "litter_k8s_rg" {
 }
 
 resource "azurerm_kubernetes_cluster" "aks" {
-  name                = var.k8s_cluster_name
-  location            = azurerm_resource_group.litter_k8s_rg.location
-  resource_group_name = azurerm_resource_group.litter_k8s_rg.name
-  dns_prefix          = var.k8s_cluster_name
+  name                      = var.k8s_cluster_name
+  location                  = azurerm_resource_group.litter_k8s_rg.location
+  resource_group_name       = azurerm_resource_group.litter_k8s_rg.name
+  dns_prefix                = var.k8s_cluster_name
+  # OIDC and workload identity are enabled to allow cert-manager to authenticate with Azure DNS
+  #   see: https://cert-manager.io/docs/configuration/acme/dns01/azuredns/#managed-identity-using-aad-pod-identity
+  oidc_issuer_enabled       = true
+  workload_identity_enabled = true
   default_node_pool {
     name            = "nodepool"
     node_count      = var.k8s_node_count
@@ -166,39 +170,36 @@ resource "kubernetes_persistent_volume_claim" "mongo_db_pvc" {
   depends_on = [kubernetes_namespace.env]
 }
 
-############################################################
-# TLS: Cert-Manager & Ingress
-############################################################
-# dynamic wait using a provisioner to repeatedly check DNS propagation success
-resource "null_resource" "wait_for_dns" {
-  provisioner "local-exec" {
-    command = <<-EOT
-      #!/bin/bash
-      TARGET="${var.app_environment}.${var.az_dns_zone_name}"
-      EXPECTED="${azurerm_public_ip.litter_ip.ip_address}"
-      TIMEOUT=600 # maximum total wait time (in seconds)
-      INTERVAL=30 # time between checks (in seconds)
-      ELAPSED=0
-      echo "Waiting for DNS record $TARGET to propagate to $EXPECTED..."
-      while [ $ELAPSED -lt $TIMEOUT ]; do
-        RESOLVED=$(dig +short $TARGET | tr -d '[:space:]')
-        if [ "$RESOLVED" = "$EXPECTED" ]; then
-          echo "DNS propagation complete: $RESOLVED matches expected IP."
-          exit 0
-        fi
-        echo "DNS not yet propagated. Resolved to '$RESOLVED', expected '$EXPECTED'. Sleeping for $INTERVAL s..."
-        sleep $INTERVAL
-        ELAPSED=$((ELAPSED + INTERVAL))
-      done
-      echo "Timeout ($TIMEOUT s) reached without successful DNS propagation. Womp womp."
-      exit 1
-    EOT
-    interpreter = ["/bin/bash", "-c"]
-  }
-  depends_on = [azurerm_dns_a_record.litter_dns]
+# look up the existing Azure DNS zone
+data "azurerm_dns_zone" "litter_dns" {
+  name                = var.az_dns_zone_name
+  resource_group_name = var.az_dns_rg
 }
 
-# create all the Cert-Manager related resources
+# create a managed identity for cert-manager to update DNS records via AzureDNS
+resource "azurerm_user_assigned_identity" "cert_manager_identity" {
+  name                = "${var.app_name}-cert-manager-identity"
+  resource_group_name = azurerm_resource_group.litter_k8s_rg.name
+  location            = azurerm_resource_group.litter_k8s_rg.location
+}
+
+# grant the managed identity permission to manage DNS records (DNS Zone Contributor)
+resource "azurerm_role_assignment" "cert_manager_dns" {
+  scope                = data.azurerm_dns_zone.litter_dns.id
+  role_definition_name = "DNS Zone Contributor"
+  principal_id         = azurerm_user_assigned_identity.cert_manager_identity.principal_id
+}
+
+# create a federated identity credential for cert-manager to authenticate with Azure AD
+resource "azurerm_federated_identity_credential" "cert_manager_federated" {
+  name                = "cert-manager-federated-credential"
+  resource_group_name = azurerm_resource_group.litter_k8s_rg.name
+  issuer              = azurerm_kubernetes_cluster.aks.oidc_issuer_url
+  subject             = "system:serviceaccount:cert-manager:cert-manager"
+  audience = ["api://AzureADTokenExchange"]
+  parent_id           = azurerm_user_assigned_identity.cert_manager_identity.id
+}
+
 module "cert_manager" {
   source                                 = "terraform-iaac/cert-manager/kubernetes"
   cluster_issuer_email                   = data.azurerm_key_vault_secret.kv_acme_email.value
@@ -207,11 +208,39 @@ module "cert_manager" {
   cluster_issuer_private_key_secret_name = "${var.app_name}-acme-key"
   solvers = [
     {
-      http01 = {
-        ingress = {
-          class = "nginx"
+      dns01 = {
+        azureDNS = {
+          subscriptionID    = var.az_subscription_id
+          resourceGroupName = var.az_dns_rg
+          hostedZoneName    = var.az_dns_zone_name
+          managedIdentity = {
+            clientID = azurerm_user_assigned_identity.cert_manager_identity.client_id
+          }
         }
       }
+      selector = {
+        dnsZones = [var.az_dns_zone_name]
+      }
+    }
+  ]
+  additional_set = [
+    {
+      name  = "podLabels.azure\\.workload\\.identity\\/use"
+      value = "true"
+      type  = "string" # otherwise this is interpreted as a bool which causes an error
+    },
+    {
+      name  = "serviceAccount.labels.azure\\.workload\\.identity\\/use"
+      value = "true"
+      type  = "string" # otherwise this is interpreted as a bool which causes an error
+    },
+    {
+      name  = "serviceAccount.annotations.azure\\.workload\\.identity\\/client-id"
+      value = azurerm_user_assigned_identity.cert_manager_identity.client_id
+    },
+    {
+      name  = "serviceAccount.annotations.azure\\.workload\\.identity\\/tenant-id"
+      value = azurerm_user_assigned_identity.cert_manager_identity.tenant_id
     }
   ]
   certificates = {
@@ -222,48 +251,8 @@ module "cert_manager" {
     }
   }
   depends_on = [
-    kubernetes_namespace.env,
-    helm_release.nginx_ingress,
-    azurerm_dns_a_record.litter_dns,
-  ]
-}
-
-# ingress for the ACME challenge to a dummy service
-# (this is required for the ACME challenge to work)
-resource "kubernetes_ingress_v1" "acme_challenge_ingress" {
-  metadata {
-    name      = "${var.app_name}-acme-challenge-ingress"
-    namespace = "${var.app_name}-${var.app_environment}"
-    annotations = {
-      "cert-manager.io/cluster-issuer"            = module.cert_manager.cluster_issuer_name
-      "acme.cert-manager.io/http01-edit-in-place" = "true"
-      "nginx.ingress.kubernetes.io/ssl-redirect"  = "false"
-    }
-  }
-  spec {
-    ingress_class_name = "nginx"
-    rule {
-      host = "${var.app_environment}.${var.az_dns_zone_name}"
-      http {
-        path {
-          path      = "/.well-known/acme-challenge"
-          path_type = "ImplementationSpecific"
-          backend {
-            service {
-              name = "dummy-service"
-              port {
-                number = 80
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  depends_on = [
-    module.cert_manager,
-    helm_release.litter,
-    azurerm_dns_a_record.litter_dns
+    azurerm_kubernetes_cluster.aks,
+    azurerm_federated_identity_credential.cert_manager_federated
   ]
 }
 
@@ -273,6 +262,7 @@ resource "kubernetes_ingress_v1" "litter_ingress" {
     name      = "${var.app_name}-ingress-${var.app_environment}"
     namespace = "${var.app_name}-${var.app_environment}"
     annotations = {
+      "cert-manager.io/cluster-issuer"           = module.cert_manager.cluster_issuer_name
       "nginx.ingress.kubernetes.io/ssl-redirect" = "true"
     }
   }
@@ -280,7 +270,7 @@ resource "kubernetes_ingress_v1" "litter_ingress" {
     ingress_class_name = "nginx"
     tls {
       hosts = ["${var.app_environment}.${var.az_dns_zone_name}"]
-      secret_name = "${var.app_name}-tls-${var.app_environment}"
+      secret_name = module.cert_manager.certificates["${var.app_name}-${var.app_environment}"].secret_name
     }
     rule {
       host = "${var.app_environment}.${var.az_dns_zone_name}"
@@ -461,8 +451,5 @@ resource "kubernetes_job" "mongo_restore_job" {
       }
     }
   }
-  depends_on = [
-    helm_release.litter,
-    kubernetes_config_map.mongo_sample_collections_cm
-  ]
+  depends_on = [helm_release.litter, kubernetes_config_map.mongo_sample_collections_cm]
 }
