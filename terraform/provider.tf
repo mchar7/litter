@@ -66,4 +66,5 @@ provider "kubectl" {
   client_certificate     = local.kubeconfig.client_certificate
   client_key             = local.kubeconfig.client_key
   cluster_ca_certificate = local.kubeconfig.cluster_ca_certificate
+  load_config_file       = false
 }
