@@ -1,6 +1,4 @@
 name: CD - Deploy to AKS
-permissions:
-  contents: read
 env:
   ROOT_DOMAIN: "litter.dev"
 on:
@@ -151,16 +149,15 @@ jobs:
     env:
       # Azure credentials (cannot use azure/login action with service principal)
       #   See: https://github.com/hashicorp/terraform-provider-azurerm/issues/22034
-      ARM_USE_OIDC: true
-      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TERRAFORM_WORKING_DIR: "./terraform"
     environment:
       name: ${{ needs.prepare-deployment.outputs.environment_name }}
       url: ${{ needs.prepare-deployment.outputs.environment_url }}
-    permissions: # Extra id-token permission needed to deploy to Azure using OIDC
-      id-token: write
+    permissions:
       contents: read
     timeout-minutes: 25 # This can take a WHILE, especially on first deployment, especially with cheap node SKUs
     steps:
