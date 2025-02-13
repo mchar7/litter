@@ -29,3 +29,12 @@ jobs:
 
       - name: Execute Gradle build (with tests)
         run: ./gradlew build
+
+      # If run was triggered by a pull request or manual run, upload the JAR artifact
+      - name: Upload JAR artifact
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: litter-jar
+          path: build/libs/litter.jar
+          if-no-files-found: error
