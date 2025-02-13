@@ -17,9 +17,9 @@ on:
         required: true
         description: "Deployment environment"
         options:
-          - "dev"
-          - "staging"
-          - "prod"
+          - "Production"
+          - "Staging"
+          - "Development"
       acme_provider_name:
         type: choice
         required: true
@@ -59,6 +59,7 @@ jobs:
     outputs:
       image_path: ${{ steps.image-path.outputs.image_path }}
       environment_name: ${{ steps.determine-env-name.outputs.environment_name }}
+      environment_code: ${{ steps.determine-env-name.outputs.environment_code }}
       environment_url: ${{ steps.determine-env-url.outputs.environment_url }}
       acme_provider_url: ${{ steps.determine-acme-url.outputs.acme_provider_url }}
     steps:
@@ -90,20 +91,35 @@ jobs:
             CI_TRIGGER_EVENT="${{ github.event.workflow_run.event_name }}"
             if [[ "$CI_TRIGGER_EVENT" == "pull_request" ]]; then
               BASE_BRANCH="${{ github.event.workflow_run.event.pull_request.base.ref }}"
-              environmentName="$([[ "$BASE_BRANCH" == "main" ]] && echo "staging" || echo "dev")"
+              environmentName="$([[ "$BASE_BRANCH" == "main" ]] && echo "Staging" || echo "Development")"
             else
-              environmentName="dev" # default to "dev" if CI was triggered manually
+              environmentName="Development" # default to dev if CI was triggered manually
             fi
           else
             echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
           fi
+          
+          # get the environment code (prod, staging, dev) from the environment name for use in Terraform
+          case $environmentName in
+            "Production")
+              environmentCode="prod"
+              ;;
+            "Staging")
+              environmentCode="staging"
+              ;;
+            "Development")
+              environmentCode="dev"
+              ;;
+          esac
+
           echo "environment_name=$environmentName" >> $GITHUB_OUTPUT
+          echo "environment_code=$environmentCode" >> $GITHUB_OUTPUT
 
       # Determine the deployment's URL (e.g. prod.litter.dev, where prod = environment_name and litter.dev = ROOT_DOMAIN)
       - name: Determine Environment URL
         id: determine-env-url
         run: |
-          echo "environment_url=${{ steps.determine-env-name.outputs.environment_name }}.${{ env.ROOT_DOMAIN }}" >> $GITHUB_OUTPUT
+          echo "environment_url=${{ steps.determine-env-name.outputs.environment_code }}.${{ env.ROOT_DOMAIN }}" >> $GITHUB_OUTPUT
 
       # Given the human-readable ACME provider choices for manual dispatch, determine the ACME server URL
       #   Default to Let's Encrypt's production server for PR-triggered deployments to main, else default to staging
@@ -119,7 +135,7 @@ jobs:
               echo "Error: Unsupported ACME provider '${{ github.event.inputs.acme_provider_name }}'."; exit 1
             fi
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            if [[ ${{ steps.determine-env-name.outputs.environment_name }} == "prod" ]]; then
+            if [[ ${{ steps.determine-env-name.outputs.environment_code }} == "prod" ]]; then
               acmeProviderURL="https://acme-v02.api.letsencrypt.org/directory"
             else
               acmeProviderURL="https://acme-staging-v02.api.letsencrypt.org/directory"
@@ -171,7 +187,7 @@ jobs:
             -var "az_dns_zone_name    = ${{ vars.AZ_DNS_ZONE_NAME }}" \
             -var "az_subscription_id  = ${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var "acme_provider_url   = ${{ needs.prepare-deployment.outputs.acme_provider_url }}" \
-            -var "app_environment     = ${{ needs.prepare-deployment.outputs.environment_name }}" \
+            -var "app_environment     = ${{ needs.prepare-deployment.outputs.environment_code }}" \
             -var "app_image_repo_url  = ${{ needs.prepare-deployment.outputs.image_path }}" \
             -var "app_image_tag       = ${{ github.event.workflow_run.head_sha || github.sha }}"
             -out=tfplan
