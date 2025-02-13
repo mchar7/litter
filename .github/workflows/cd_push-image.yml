@@ -39,7 +39,7 @@ jobs:
           else
             echo "Error: No build run ID provided"; exit 1
           fi
-          echo "build_run_id=${BUILD_RUN_ID}" >> $GITHUB_OUTPUT
+          echo "build_run_id=$BUILD_RUN_ID" >> $GITHUB_OUTPUT
           echo "Build run ID: $BUILD_RUN_ID"
 
       # Download the artifact using the download-artifact action
