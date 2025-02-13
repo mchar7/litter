@@ -1,6 +1,7 @@
 package org.ac.cst8277.chard.matt.litter.controller;
 
 import org.ac.cst8277.chard.matt.litter.model.Message;
+import org.ac.cst8277.chard.matt.litter.security.LogSanitizer;
 import org.ac.cst8277.chard.matt.litter.service.MessageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,7 +56,7 @@ public class MessageController {
 
         return messageService.createMessage(jwt, content)
                 .map(message -> {
-                    logger.info("Message created successfully by user: {}", jwt.getSubject());
+                    logger.info("Message created successfully by user: {}", LogSanitizer.sanitize(jwt.getSubject()));
                     String resourceUrl = "/messages/%s".formatted(message.getMessageId());
                     return ResponseEntity.created(URI.create(resourceUrl)).body(message);
                 })
@@ -75,7 +76,7 @@ public class MessageController {
     @DeleteMapping({"/{id}", "/{id}/"})
     public Mono<ResponseEntity<Void>> deleteMessage(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
         if (null == id || id.isEmpty()) {
-            logger.warn("Attempted to delete message with invalid ID");
+            logger.warn("Attempted to delete message with empty ID");
             return Mono.just(ResponseEntity.badRequest().build());
         }
 
@@ -96,13 +97,13 @@ public class MessageController {
     @GetMapping({"/{id}", "/{id}/"})
     public Mono<ResponseEntity<Message>> getMessage(@PathVariable String id) {
         if (null == id || id.isEmpty()) {
-            logger.warn("Attempted to get message with invalid ID");
+            logger.warn("Attempted to get message with empty ID");
             return Mono.just(ResponseEntity.badRequest().build());
         }
 
         return messageService.getMessageById(id)
                 .map(message -> {
-                    logger.info("Message retrieved successfully: {}", id);
+                    logger.info("Message retrieved successfully: {}", message.getMessageId());
                     return ResponseEntity.ok(message);
                 })
                 .defaultIfEmpty(ResponseEntity.notFound().build());
@@ -123,7 +124,7 @@ public class MessageController {
 
         return messageService.getMessagesForProducer(producerUsername)
                 .map(messages -> {
-                    logger.info("Retrieved messages for producer: {}", producerUsername);
+                    logger.info("Retrieved messages for producer: {}", LogSanitizer.sanitize(producerUsername));
                     return ResponseEntity.ok(messages);
                 })
                 .defaultIfEmpty(ResponseEntity.notFound().build());
@@ -139,7 +140,7 @@ public class MessageController {
     public Mono<ResponseEntity<Flux<Message>>> getAllMessagesForSubscriber(@AuthenticationPrincipal Jwt jwt) {
         return messageService.findAllMessagesForSubscriber(jwt)
                 .map(messages -> {
-                    logger.info("Retrieved subscribed messages for user: {}", jwt.getSubject());
+                    logger.info("Retrieved subscribed messages for user: {}", LogSanitizer.sanitize(jwt.getSubject()));
                     return ResponseEntity.ok().body(messages);
                 })
                 .defaultIfEmpty(ResponseEntity.noContent().build());
