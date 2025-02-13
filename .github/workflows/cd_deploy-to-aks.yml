@@ -112,12 +112,15 @@ jobs:
 
           echo "environment_name=$environmentName" >> $GITHUB_OUTPUT
           echo "environment_code=$environmentCode" >> $GITHUB_OUTPUT
+          echo "Environment: '$environmentName' (code: '$environmentCode')"
 
       # Determine the deployment's URL (e.g. prod.litter.dev, where prod = environment_name and litter.dev = ROOT_DOMAIN)
       - name: Determine Environment URL
         id: determine-env-url
         run: |
-          echo "environment_url=${{ steps.determine-env-name.outputs.environment_code }}.${{ env.ROOT_DOMAIN }}" >> $GITHUB_OUTPUT
+          environmentURL="${{ steps.determine-env-name.outputs.environment_code }}.${{ env.ROOT_DOMAIN }}"
+          echo "environment_url=$environmentURL" >> $GITHUB_OUTPUT
+          echo "Environment URL: $environmentURL"
 
       # Given the human-readable ACME provider choices for manual dispatch, determine the ACME server URL
       #   Default to Let's Encrypt's production server for PR-triggered deployments to main, else default to staging
@@ -142,6 +145,7 @@ jobs:
             echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
           fi
           echo "acme_provider_url=$acmeProviderURL" >> $GITHUB_OUTPUT
+          echo "ACME Provider URL: $acmeProviderURL"
 
   deploy-to-aks:
     needs: prepare-deployment
@@ -189,7 +193,7 @@ jobs:
             -var "acme_provider_url=${{ needs.prepare-deployment.outputs.acme_provider_url }}" \
             -var "app_environment=${{ needs.prepare-deployment.outputs.environment_code }}" \
             -var "app_image_repo_url=${{ needs.prepare-deployment.outputs.image_path }}" \
-            -var "app_image_tag=${{ github.event.workflow_run.head_sha || github.sha }}" \
+            -var "app_image_tag=${{ github.event.workflow_run.head_sha || 'latest' }}" \
             -out=tfplan
 
       - name: Terraform apply
