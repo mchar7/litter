@@ -1,14 +1,19 @@
+# This workflow is responsible for deploying the application to an Azure Kubernetes Service (AKS) cluster.
+# It is triggered automatically when the CI - Push Image workflow completes on the main branch,
+#   or it can be triggered manually via workflow_dispatch.
 name: CD - Deploy to AKS
-permissions:
-  contents: read
 env:
   ROOT_DOMAIN: "litter.dev"
 on:
   # Trigger deployment after successful CI run
   workflow_run:
-    workflows: [ "CI - Build, Test, Push" ]
+    workflows: [ CD - Push Image ]
     types:
       - completed
+    # runs triggered by workflow_run always run from the main branch
+    #   thus do not run when CI is run on other branches
+    branches:
+      - main
   # Allow manual trigger of workflow to deploy to specified environment
   workflow_dispatch:
     inputs:
@@ -114,12 +119,15 @@ jobs:
 
           echo "environment_name=$environmentName" >> $GITHUB_OUTPUT
           echo "environment_code=$environmentCode" >> $GITHUB_OUTPUT
+          echo "Environment: '$environmentName' (code: '$environmentCode')"
 
       # Determine the deployment's URL (e.g. prod.litter.dev, where prod = environment_name and litter.dev = ROOT_DOMAIN)
       - name: Determine Environment URL
         id: determine-env-url
         run: |
-          echo "environment_url=${{ steps.determine-env-name.outputs.environment_code }}.${{ env.ROOT_DOMAIN }}" >> $GITHUB_OUTPUT
+          environmentURL="${{ steps.determine-env-name.outputs.environment_code }}.${{ env.ROOT_DOMAIN }}"
+          echo "environment_url=$environmentURL" >> $GITHUB_OUTPUT
+          echo "Environment URL: $environmentURL"
 
       # Given the human-readable ACME provider choices for manual dispatch, determine the ACME server URL
       #   Default to Let's Encrypt's production server for PR-triggered deployments to main, else default to staging
@@ -144,6 +152,7 @@ jobs:
             echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
           fi
           echo "acme_provider_url=$acmeProviderURL" >> $GITHUB_OUTPUT
+          echo "ACME Provider URL: $acmeProviderURL"
 
   deploy-to-aks:
     needs: prepare-deployment
@@ -151,18 +160,22 @@ jobs:
     env:
       # Azure credentials (cannot use azure/login action with service principal)
       #   See: https://github.com/hashicorp/terraform-provider-azurerm/issues/22034
-      ARM_USE_OIDC: true
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TERRAFORM_WORKING_DIR: "./terraform"
     environment:
       name: ${{ needs.prepare-deployment.outputs.environment_name }}
       url: ${{ needs.prepare-deployment.outputs.environment_url }}
-    permissions: # Extra id-token permission needed to deploy to Azure using OIDC
-      id-token: write
+    permissions:
       contents: read
     timeout-minutes: 25 # This can take a WHILE, especially on first deployment, especially with cheap node SKUs
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -183,13 +196,13 @@ jobs:
         run: | # For app image tag, use head sha if PR, else use commit sha
           terraform plan \
             -var-file="example.tfvars" \
-            -var "az_dns_rg           = ${{ vars.AZ_DNS_RG }}" \
-            -var "az_dns_zone_name    = ${{ vars.AZ_DNS_ZONE_NAME }}" \
-            -var "az_subscription_id  = ${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
-            -var "acme_provider_url   = ${{ needs.prepare-deployment.outputs.acme_provider_url }}" \
-            -var "app_environment     = ${{ needs.prepare-deployment.outputs.environment_code }}" \
-            -var "app_image_repo_url  = ${{ needs.prepare-deployment.outputs.image_path }}" \
-            -var "app_image_tag       = ${{ github.event.workflow_run.head_sha || github.sha }}"
+            -var "az_dns_rg=${{ vars.AZ_DNS_RG }}" \
+            -var "az_dns_zone_name=${{ vars.AZ_DNS_ZONE_NAME }}" \
+            -var "az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            -var "acme_provider_url=${{ needs.prepare-deployment.outputs.acme_provider_url }}" \
+            -var "app_environment=${{ needs.prepare-deployment.outputs.environment_code }}" \
+            -var "app_image_repo_url=${{ needs.prepare-deployment.outputs.image_path }}" \
+            -var "app_image_tag=${{ github.event.workflow_run.head_sha || 'latest' }}" \
             -out=tfplan
 
       - name: Terraform apply
