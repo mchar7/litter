@@ -33,12 +33,14 @@ jobs:
         id: determine-run
         run: |
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            echo "BUILD_RUN_ID=${{ github.event.workflow_run.id }}"
+            BUILD_RUN_ID=${{ github.event.workflow_run.id }}
           elif [ -n "${{ github.event.inputs.build_run_id }}" ]; then
-            echo "BUILD_RUN_ID=${{ github.event.inputs.build_run_id }}"
+            BUILD_RUN_ID=${{ github.event.inputs.build_run_id }}
           else
-            echo "Error: No build run ID provided"; exit 1
+            echo "Error: No build run ID provided"
+            exit 1
           fi
+          # Write output to the GitHub Actions output file
           echo "build_run_id=$BUILD_RUN_ID" >> $GITHUB_OUTPUT
           echo "Build run ID: $BUILD_RUN_ID"
 
