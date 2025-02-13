@@ -1,5 +1,5 @@
 ![Litter Banner](res/img/litter_banner_2950x738.png)
-![CI/CD](https://img.shields.io/github/workflow/status/mchar7/litter/Build%20and%20Deploy%20with%20Terraform?style=for-the-badge&logo=github&label=CI/CD)
+![CI/CD](https://img.shields.io/github/actions/workflow/status/mchar7/litter/ci_build-test.yml?branch=main&style=for-the-badge&logo=github&label=CI/CD)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.1-brightgreen?style=for-the-badge&logo=spring-boot)
 ![Java](https://img.shields.io/badge/Java-Corretto%2021-orange?style=for-the-badge&logo=openjdk)
 ![MongoDB](https://img.shields.io/badge/MongoDB-8.0-green?style=for-the-badge&logo=mongodb)
