@@ -8,7 +8,7 @@ permissions: { } # default to minimal permission, overriding in jobs only as nee
 on:
   # Trigger deployment after successful CI run
   workflow_run:
-    workflows: [ CD - Push Image ]
+    workflows: [ CI ]
     types:
       - completed
     # runs triggered by workflow_run always run from the main branch
