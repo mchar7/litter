@@ -9,14 +9,9 @@ I'd recommend using the Terraform setup in this repository to handle the entire 
 > - [x] Unix-based terminal (Linux, macOS, WSL, etc.)
 > - [x] Helm [installed](https://helm.sh/docs/intro/install/) and configured on your local machine
 > - [x] Cluster running and configured with:
-    >
-
-- A valid StorageClass (and PVC already created if you need MongoDB data persistence)
-
-> - Certificate management (if you require HTTPS) and ingress setup (this chart assumes 'nginx-ingress' is on the cluster)
-    >
-
-- Any other dependencies your environment might require
+>> - [x] A valid StorageClass (and PVC already created if you need MongoDB data persistence)
+>> - [x] Certificate management (if you require HTTPS) and ingress setup (this chart assumes 'nginx-ingress' is on the cluster)
+>> - [x] Any other dependencies your environment might require
 
 ## Instructions
 
@@ -51,7 +46,7 @@ helm install litter ./chart \
 The main configuration is in:
 
 * *values.common.yaml*: Shared default values used across all environments.
-* *values.<env>.yaml*: Environment-specific overrides (e.g., dev vs. staging vs. prod).
+* *values.(env).yaml*: Environment-specific overrides (e.g., dev vs. staging vs. prod).
 
 > [!TIP]
 > If you don't need separate environments, you can just stick to `values.common.yaml` and pass in minimal overrides.
