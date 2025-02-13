@@ -109,9 +109,9 @@ jobs:
           images: |
             ${{ steps.image-path.outputs.image_path }}
           tags: |
-            type=pr,prefix=pr-,enable=${{ github.event_name == 'pull_request' }}
+            type=raw,value=pr-${{ github.event.number }},enable=${{ github.event_name == 'pull_request' }}
             type=raw,value=${{ steps.app-version.outputs.app_version }},enable=${{ github.ref == 'refs/heads/main' }}
-            type=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
 
       - name: Build and push Docker image
