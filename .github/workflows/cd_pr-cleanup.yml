@@ -53,13 +53,13 @@ jobs:
           # Use extended regular expressions to update the key, regardless of whitespace differences
           sed -E -i "s/^[[:space:]]*key[[:space:]]*=[[:space:]]*\"[^\"]*\"/  key = \"${NEW_KEY}\"/" $BACKEND_FILENAME
 
-      - name: Select Terraform workspace
-        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-        run: terraform workspace select ${{ steps.determine_env_code.outputs.env_code }}
-
       - name: Terraform init
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         run: terraform init
+
+      - name: Select Terraform workspace
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        run: terraform workspace select ${{ steps.determine_env_code.outputs.env_code }}
 
       - name: Terraform destroy
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
