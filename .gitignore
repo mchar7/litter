@@ -1,3 +1,10 @@
+# common .ignore patterns
+.DS_Store
+*.swp
+*.log
+*.bak
+*.old
+
 # local builds & dev files; not needed in repo
 .run
 .env
@@ -5,15 +12,13 @@
 *.iml
 build/
 target/
-.private/
-
-# gradle caches
 .gradle/
+.private/
+.secrets
 
-# common .ignore patterns
-.DS_Store
-*.swp
-*.log
-*.bak
-*.old
-/.secrets
+# local-only Terraform files
+/terraform/.terraform/
+/terraform/.tfvars
+*.tfstate
+*.tfstate.backup
+*.lock.hcl

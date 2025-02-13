@@ -1,0 +1,23 @@
+# overrides for prod environment
+# if no overrides are needed, include an empty object "---" or else yq will error
+app:
+  replicaCount: 2
+  resources:
+    requests:
+      memory: "128Mi" # higher resource allocation for prod
+      cpu: "100m"
+      storage: "256Mi"
+    limits:
+      memory: "1Gi"
+      cpu: "1"
+      storage: "1Gi"
+mongo:
+  resources:
+    requests:
+      memory: "512Mi" # higher resource allocation for prod
+      cpu: "200m"
+      storage: "512Mi"
+    limits:
+      memory: "1Gi"
+      cpu: "1"
+      storage: "2Gi"

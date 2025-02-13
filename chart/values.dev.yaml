@@ -1,0 +1,7 @@
+# overrides for development environment
+# if no overrides are needed, include an empty object "---" or else yq will error
+app:
+  replicaCount: 1
+
+mongo:
+  replicaCount: 1

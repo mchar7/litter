@@ -1,16 +1,15 @@
 services:
   litter-app:
     build:
-      context: .
+      context: ../
       dockerfile: Dockerfile
+      args:
+        JAR_FILE: build/libs/litter.jar
     env_file:
-      - ./.private/.env
+      - .env # your edited example.env
     ports:
       - "8080:8080"
-      - "5005:5005"
-    environment:
-      # enable remote debugging
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,address=*:5005,server=y,suspend=n
+      - "5005:5005" # for remote debugging
     depends_on:
       - litter-db
 

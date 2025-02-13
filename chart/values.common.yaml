@@ -1,0 +1,70 @@
+app:
+  replicaCount: 2
+  metadata:
+    labels:
+      app: litter-app
+      sa: litter-app-sa
+      component: app
+    friendlyAppName: "Litter"
+  image:
+    tag: ""        # will be overridden via Terraform
+    repository: "" # will be overridden via Terraform
+    pullPolicy: Always
+  service:
+    port: 8080
+    selector: litter-app
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+      storage: "128Mi"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
+      storage: "256Mi"
+  env:
+    MONGO_HOST: "litter-db"
+    MONGO_PORT: "27017"
+    MONGO_DB: "" # will be overridden via Terraform
+    MONGO_USER:
+      valueFrom:
+        secretKeyRef:
+          name: litter-secrets
+          key: mongo-app-username
+    MONGO_PASSWORD:
+      valueFrom:
+        secretKeyRef:
+          name: litter-secrets
+          key: mongo-app-password
+    JWT_SECRET:
+      valueFrom:
+        secretKeyRef:
+          name: litter-secrets
+          key: jwt-secret
+mongo:
+  replicaCount: 1
+  metadata:
+    labels:
+      app: litter-db
+      sa: litter-db-sa
+      component: db
+  image:
+    repository: mongo
+    tag: "8.0"
+  service:
+    port: 27017
+    selector: litter-db
+  volume:
+    pvc:
+      name: litter-db-pvc
+    mountPath: /data/db
+    mountName: mongo-data
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "50m"
+      storage: "256Mi"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
+      storage: "2Gi"

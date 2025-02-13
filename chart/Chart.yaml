@@ -1,6 +1,5 @@
-version: 0.0.1 # version of Helm chart
 apiVersion: v2
-type: application
 name: litter
+version: 0.0.2
 description: A Helm chart for the Litter application on Kubernetes (with Azure AKS)
-appVersion: "{{ .Values.app.metadata.appVersion }}" # version of app image, replaced during CI/CD pipeline
+type: application

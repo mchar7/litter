@@ -16,12 +16,11 @@ spec:
         component: {{ .Values.mongo.metadata.labels.component }}
     spec:
       serviceAccountName: {{ .Values.mongo.metadata.labels.sa }}
-      automountServiceAccountToken: false
       containers:
         - name: {{ .Values.mongo.metadata.labels.app }}
           image: "{{ .Values.mongo.image.repository }}:{{ .Values.mongo.image.tag }}"
           ports:
-            - containerPort: 27017
+            - containerPort: {{ .Values.mongo.service.port }}
           resources:
             requests:
               memory: {{ .Values.mongo.resources.requests.memory }}

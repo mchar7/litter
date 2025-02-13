@@ -1,8 +1,14 @@
+# read the environment variables to connect to the database
 spring:
   data:
     mongodb:
-      uri: ${SPRING_DATA_MONGODB_URI}
+      host: ${MONGO_HOST:localhost}
+      port: ${MONGO_PORT:27017}
+      database: ${MONGO_DB:litter}
+      username: ${MONGO_USER:""}
+      password: ${MONGO_PASSWORD:""}
 
+# JWT secret is also read from its environment variable
 jwt:
   secret: ${JWT_SECRET}
   issuer: litter
