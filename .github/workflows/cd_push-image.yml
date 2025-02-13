@@ -28,7 +28,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      # Determine the build run ID:
       - name: Determine Build Run ID
         id: determine-run
         run: |
@@ -40,9 +39,9 @@ jobs:
             echo "Error: No build run ID provided"
             exit 1
           fi
-          # Write output to the GitHub Actions output file
-          echo "build_run_id=$BUILD_RUN_ID" >> $GITHUB_OUTPUT
-          echo "Build run ID: $BUILD_RUN_ID"
+          # Set the step output so the subsequent job can retrieve the run id.
+          echo "build_run_id=${BUILD_RUN_ID}" >> $GITHUB_OUTPUT
+          echo "Build run ID: ${BUILD_RUN_ID}"
 
       # Download the artifact using the download-artifact action
       - name: Download JAR Artifact from Build Workflow
