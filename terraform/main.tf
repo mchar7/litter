@@ -312,7 +312,8 @@ resource "helm_release" "litter" {
   # pass the values files to the Helm chart (files placed lower override those above them)
   values = [
     file("${path.root}/../chart/values.common.yaml"), # common (shared) values file
-    file("${path.root}/../chart/values.${var.app_environment}.yaml"), # override with environment-specific values file
+    # if app_helm_overrides_path is set/not null, use the provided file:
+      var.app_helm_overrides_path != null ? file("${path.root}/../chart/${var.app_helm_overrides_path}") : "",
   ]
   set {
     name  = "app.image.repository"

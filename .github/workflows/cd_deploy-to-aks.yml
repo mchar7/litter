@@ -1,20 +1,16 @@
 # This workflow is responsible for deploying the application to an Azure Kubernetes Service (AKS) cluster.
-# It is triggered automatically when the CI - Push Image workflow completes on the main branch,
+# It is triggered automatically when the CI workflow completes (for both PR and main branch deployments),
 #   or it can be triggered manually via workflow_dispatch.
 name: CD - Deploy to AKS
 env:
   ROOT_DOMAIN: "litter.dev"
 permissions: { } # default to minimal permission, overriding in jobs only as needed
 on:
-  # Trigger deployment after successful CI run
+  # Trigger deployment after successful CI run (for both merged commits and PR builds)
   workflow_run:
     workflows: [ CI ]
     types:
       - completed
-    # runs triggered by workflow_run always run from the main branch
-    #   thus do not run when CI is run on other branches
-    branches:
-      - main
   # Allow manual trigger of workflow to deploy to specified environment
   workflow_dispatch:
     inputs:
@@ -23,14 +19,14 @@ on:
         required: true
         description: "Deployment environment"
         options:
-          - "Production"
           - "Staging"
           - "Development"
+          - "Production"
       acme_provider_name:
         type: choice
         required: true
         description: "ACME provider"
-        default: "Let's Encrypt - Production"
+        default: "Let's Encrypt - Staging"
         options:
           - "Let's Encrypt - Production"  # Ideal when deploying to publicly accessible domain
           - "Let's Encrypt - Staging"     # Ideal when frequently testing deployment (avoid rate limits on prod server)
@@ -64,10 +60,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       image_path: ${{ steps.image-path.outputs.image_path }}
-      environment_name: ${{ steps.determine-env-name.outputs.environment_name }}
-      environment_code: ${{ steps.determine-env-name.outputs.environment_code }}
-      environment_url: ${{ steps.determine-env-url.outputs.environment_url }}
+      image_tag: ${{ steps.determine-image-tag.outputs.image_tag }}
+      environment_name: ${{ steps.determine-env.outputs.environment_name }}
+      environment_code: ${{ steps.determine-env.outputs.environment_code }}
+      environment_url: ${{ steps.determine-env.outputs.environment_url }}
       acme_provider_url: ${{ steps.determine-acme-url.outputs.acme_provider_url }}
+      app_helm_overrides_path: ${{ steps.select-helm-overrides.outputs.app_helm_overrides_path }}
     steps:
       # Image repo must be lowercase and GitHub Actions doesn't have easy string manipulation.
       #   Was causing issues when username had an uppercase letter
@@ -79,59 +77,56 @@ jobs:
           echo "image_path=$imagePath" >> $GITHUB_OUTPUT
           echo "Image path: $imagePath"
 
-      # Determine the deployment environment based on the trigger
-      # If this workflow is triggered by a workflow_run:
-      #   ... and the CI workflow was triggered by a pull request event:
-      #       ... and the base branch is 'main': deploy to staging
-      #   ... otherwise: deploy to dev
-      # If this workflow is triggered by manual dispatch:
-      #   ... use the given input
-      # The environment determines the Helm values file and the release name to use
+      # Determine the deployment environment details (name, code, URL) based on the triggering context:
+      # - For manual dispatch, use the given input for environment name and pre-defined environment codes
+      # - For workflow_run:
+      #   - If the CI workflow was triggered by a pull request event, deploy to an ephemeral environment
+      #     named "PR Staging: #<pr number>" with environment code "pr-<pr number>-staging"
+      # - For push event (always to main branch):
+      #   - Deploy to production environment, with environment code "prod"
       - name: Determine Environment
-        id: determine-env-name
+        id: determine-env
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             environmentName="${{ github.event.inputs.environment }}"
+            case "$environmentName" in
+              "Production")
+                environmentCode="prod"
+                ;;
+              "Staging")
+                environmentCode="staging"
+                ;;
+              "Development")
+                environmentCode="dev"
+                ;;
+            esac
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            # extract base branch from the CI's original pull request event
             CI_TRIGGER_EVENT="${{ github.event.workflow_run.event_name }}"
             if [[ "$CI_TRIGGER_EVENT" == "pull_request" ]]; then
-              BASE_BRANCH="${{ github.event.workflow_run.event.pull_request.base.ref }}"
-              environmentName="$([[ "$BASE_BRANCH" == "main" ]] && echo "Staging" || echo "Development")"
+              pr_number="${{ github.event.workflow_run.event.pull_request.number }}"
+              environmentName="PR Staging: #$pr_number"
+              environmentCode="pr-${pr_number}-staging"
             else
-              environmentName="Development" # default to dev if CI was triggered manually
+              environmentName="Production"
+              environmentCode="prod"
             fi
           else
             echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
           fi
-          
-          # get the environment code (prod, staging, dev) from the environment name for use in Terraform
-          case $environmentName in
-            "Production")
-              environmentCode="prod"
-              ;;
-            "Staging")
-              environmentCode="staging"
-              ;;
-            "Development")
-              environmentCode="dev"
-              ;;
-          esac
+          environmentURL="https://${{ steps.determine-env.outputs.environment_code }}.${{ env.ROOT_DOMAIN }}"
 
-          echo "environment_name=$environmentName" >> $GITHUB_OUTPUT
-          echo "environment_code=$environmentCode" >> $GITHUB_OUTPUT
-          echo "Environment: '$environmentName' (code: '$environmentCode')"
+          echo "environment_name=$environmentName"  >> $GITHUB_OUTPUT
+          echo "environment_code=$environmentCode"  >> $GITHUB_OUTPUT
+          echo "environment_url=$environmentURL"    >> $GITHUB_OUTPUT
+          echo "Environment: '$environmentName' (code: '$environmentCode', URL: '$environmentURL')"
 
-      # Determine the deployment's URL (e.g. prod.litter.dev, where prod = environment_name and litter.dev = ROOT_DOMAIN)
-      - name: Determine Environment URL
-        id: determine-env-url
-        run: |
-          environmentURL="${{ steps.determine-env-name.outputs.environment_code }}.${{ env.ROOT_DOMAIN }}"
-          echo "environment_url=$environmentURL" >> $GITHUB_OUTPUT
-          echo "Environment URL: $environmentURL"
-
-      # Given the human-readable ACME provider choices for manual dispatch, determine the ACME server URL
-      #   Default to Let's Encrypt's production server for PR-triggered deployments to main, else default to staging
+      # Determine the correct ACME Server URL based on the triggering context:
+      # - For workflow_dispatch:
+      #   - If the provided ACME provider name is "Let's Encrypt - Production", use the production endpoint.
+      #   - If the provided ACME provider name is "Let's Encrypt - Staging", use the staging endpoint.
+      # - For workflow_run:
+      #   - If the determined environment code is "prod", use the production endpoint;
+      #     otherwise, use the staging endpoint.
       - name: Determine ACME Server URL
         id: determine-acme-url
         run: |
@@ -144,7 +139,7 @@ jobs:
               echo "Error: Unsupported ACME provider '${{ github.event.inputs.acme_provider_name }}'."; exit 1
             fi
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            if [[ ${{ steps.determine-env-name.outputs.environment_code }} == "prod" ]]; then
+            if [[ ${{ steps.determine-env.outputs.environment_code }} == "prod" ]]; then
               acmeProviderURL="https://acme-v02.api.letsencrypt.org/directory"
             else
               acmeProviderURL="https://acme-staging-v02.api.letsencrypt.org/directory"
@@ -154,6 +149,53 @@ jobs:
           fi
           echo "acme_provider_url=$acmeProviderURL" >> $GITHUB_OUTPUT
           echo "ACME Provider URL: $acmeProviderURL"
+
+        # Determine the correct Docker image tag based on the triggering context:
+        # - For workflow_run:
+        #   - If the triggering event is a pull request, tag with "pr-<pr number>"
+        #   - Otherwise, for push events (merged to main) tag with the commit SHA
+        # - For manual (workflow_dispatch), default to the "latest" tag
+      - name: Determine Image Tag
+        id: determine-image-tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            CI_TRIGGER_EVENT="${{ github.event.workflow_run.event_name }}"
+            if [[ "$CI_TRIGGER_EVENT" == "pull_request" ]]; then
+              # For PR events, tag as pr-<pr number>
+              pr_number="${{ github.event.workflow_run.event.pull_request.number }}"
+              imageTag="pr-${pr_number}"
+            else
+              # For push events (merged to main) use the commit SHA
+              imageTag="${{ github.event.workflow_run.head_sha }}"
+            fi
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # For manual dispatch, default to "latest"
+            imageTag="latest"
+          else
+            echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
+          fi
+          echo "image_tag=$imageTag" >> $GITHUB_OUTPUT
+          echo "Determined Image Tag: $imageTag"
+
+      # Select the override file based on the determined environment:
+      #  - "prod" -----------> use "./chart/values.prod.yaml"
+      #  - "staging" or PR --> use "./chart/values.staging.yaml"
+      #  - "dev" or other ---> use "./chart/values.dev.yaml"
+      - name: Select Helm Overrides File
+        id: select-helm-overrides
+        run: |
+          ENV_CODE="${{ steps.determine-env.outputs.environment_code }}"
+          
+          if [[ "$ENV_CODE" == "prod" ]]; then
+            OVERRIDES="./chart/values.prod.yaml"
+          elif [[ "$ENV_CODE" == "staging" || "$ENV_CODE" =~ ^pr-.*-staging$ ]]; then
+            OVERRIDES="./chart/values.staging.yaml"
+          else
+            OVERRIDES="./chart/values.dev.yaml"
+          fi
+          
+          echo "app_helm_overrides_path=$OVERRIDES" >> $GITHUB_OUTPUT
+          echo "Selected override file: $OVERRIDES"
 
   deploy-to-aks:
     needs: prepare-deployment
@@ -171,7 +213,7 @@ jobs:
       url: ${{ needs.prepare-deployment.outputs.environment_url }}
     permissions:
       contents: read
-    timeout-minutes: 25 # This can take a WHILE, especially on first deployment, especially with cheap node SKUs
+    timeout-minutes: 25 # This can take a WHILE, especially on first deployment & with cheap node SKUs
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -182,6 +224,29 @@ jobs:
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
         with:
           terraform_version: "~> 1.10.0"
+
+      # Set the backend key dynamically
+      # Ideally the 'azurerm' backend would support 'workspace_key_prefix = "env"' but it doesn't
+      #   See: https://github.com/hashicorp/terraform/issues/28985
+      # To get around this and have our deployments isolated, this job does a janky implementation of this
+      #   by updating the key in the backend.tf file.
+      # Again, this is a workaround and not the best practice, but we have to make due until the backend supports it.
+      - name: Update Terraform backend key dynamically
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        env:
+          BACKEND_FILENAME: "backend.tf" # within the working directory
+          STATE_KEY_PREFIX: "env-" # Prefix for the state key
+          WORKSPACE_CODE: ${{ needs.prepare-deployment.outputs.environment_code }}
+        run: |
+          # Construct the new key by prepending the prefix to the workspace code
+          NEW_KEY="${STATE_KEY_PREFIX}${WORKSPACE_CODE}.tfstate"
+          echo "Updating Terraform backend key to ${NEW_KEY}"
+          # Use extended regular expressions to update the key, regardless of whitespace differences
+          sed -E -i "s/^[[:space:]]*key[[:space:]]*=[[:space:]]*\"[^\"]*\"/  key = \"${NEW_KEY}\"/" $BACKEND_FILENAME
+
+      - name: Select Terraform workspace
+        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+        run: terraform workspace select ${{ needs.prepare-deployment.outputs.environment_code }}
 
       - name: Terraform init
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
@@ -194,7 +259,7 @@ jobs:
       - name: Terraform plan
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         id: tf-plan
-        run: | # For app image tag, use head sha if PR, else use commit sha
+        run: | # For app image tag, use the output from determine-image-tag
           terraform plan \
             -var-file="example.tfvars" \
             -var "az_dns_rg=${{ vars.AZ_DNS_RG }}" \
@@ -203,7 +268,8 @@ jobs:
             -var "acme_provider_url=${{ needs.prepare-deployment.outputs.acme_provider_url }}" \
             -var "app_environment=${{ needs.prepare-deployment.outputs.environment_code }}" \
             -var "app_image_repo_url=${{ needs.prepare-deployment.outputs.image_path }}" \
-            -var "app_image_tag=${{ github.event.workflow_run.head_sha || 'latest' }}" \
+            -var "app_image_tag=${{ needs.prepare-deployment.outputs.image_tag }}" \
+            -var "app_helm_overrides_path=${{ needs.prepare-deployment.outputs.app_helm_overrides_path }}" \
             -out=tfplan
 
       - name: Terraform apply
