@@ -7,6 +7,10 @@ on:
     workflows: [ CI - Build, Test, Push ]
     types:
       - completed
+      # runs triggered by workflow_run always run from the main branch
+      #   thus do not run when CI is run on other branches
+    branches:
+      - main
   # Allow manual trigger of workflow to deploy to specified environment
   workflow_dispatch:
     inputs:
