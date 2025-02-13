@@ -34,15 +34,15 @@ jobs:
       - name: Execute Gradle build (with tests)
         run: ./gradlew build
 
-      - name: Debug
+      - name: Debug the event
         run: |
           echo "Event name: ${{ github.event_name }}"
-          echo "Base ref: ${{ github.event.pull_request.base.ref }}"
-          echo "Head ref: ${{ github.event.pull_request.head.ref }}"
+          echo "Base ref: ${{ github.base_ref }}"
+          echo "Head ref: ${{ github.head_ref }}"
 
-      # If run was triggered by a pull request or manual run, upload the JAR artifact (if needed)
+      # Upload JAR artifact for main branch builds and PR builds targeting main
       - name: Upload JAR artifact
-        if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+        if: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main') }}
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
         with:
           name: litter-jar
@@ -52,14 +52,12 @@ jobs:
   push-image:
     needs: build-and-test
     runs-on: ubuntu-latest
+    # Run for main branch or PRs targeting main
+    if: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main') }}
     permissions:
       contents: read
       packages: write
     timeout-minutes: 5
-    # Run the docker image build and push only when:
-    #  - The event is workflow_dispatch (manual trigger on any branch); or
-    #  - The event is a pull_request with base branch "main"
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -70,8 +68,9 @@ jobs:
           name: litter-jar
           path: build/libs # download to the same directory as the Gradle build for consistency
 
-      # Image repo must be lowercase and GitHub Actions doesn't have easy string manipulation.
-      #   Was causing issues when username had an uppercase letter
+      # Image path format: ghcr.io/owner/repo:{tag}
+      #   Image repo must be lowercase and GitHub Actions doesn't have easy native string manipulation.
+      #   Was causing issues when username had any uppercase. (Must work even if repo like: OwNeR/repo)
       #   See: https://github.com/orgs/community/discussions/10553
       - name: Set image path (to lowercase)
         id: image-path
@@ -90,6 +89,7 @@ jobs:
             echo "Error: Version not found in gradle.properties"; exit 1
           fi
           echo "app_version=$version" >> $GITHUB_OUTPUT
+          echo "App version: $version"
 
       - name: Log into container registry
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
@@ -98,6 +98,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Tag Docker images:
+      #  - PR to main: tag as branch and pr-{number}
+      #  - Merged to main: tag with version, SHA, and 'latest'
+      # Only merged images get permanent tags to keep the registry clean.
       - name: Prepare Docker metadata
         id: meta
         uses: docker/metadata-action@369eb591f429131d6889c46b94e711f089e6ca96
@@ -105,9 +109,11 @@ jobs:
           images: |
             ${{ steps.image-path.outputs.image_path }}
           tags: |
-            ${{ steps.app-version.outputs.app_version }}
-            ${{ github.sha }}
-          flavor: latest=true # This will tag the image with 'latest' as well as SHA and app version
+            type=ref,event=tag
+            type=ref,event=pr
+            type=semver,pattern={{ steps.app-version.outputs.app_version }},enable={{ is_default_branch }}
+            type=raw,value=latest,enable={{ is_default_branch }}
+
 
       - name: Build and push Docker image
         uses: docker/build-push-action@ca877d9245402d1537745e0e356eab47c3520991

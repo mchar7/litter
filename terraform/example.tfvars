@@ -19,11 +19,13 @@ k8s_node_disk_size_gb = 40
 mongo_db_disk_size_gb = 4
 
 # app configuration
-app_environment    = "dev"
-app_name           = "litter"
-app_image_tag      = "latest"
-app_image_repo_url = "ghcr.io/xxxx/litter"
+app_environment       = "dev"
+app_name              = "litter"
+app_image_tag         = "latest"
+app_image_repo_url    = "ghcr.io/xxxx/litter"
 app_health_probe_path = "/actuator/health"
+# leave commented out to only use values from 'values.common.yaml':
+# app_helm_overrides_path = "values.overrides.yaml"
 
 # mongo configuration
 mongo_version_tag           = "8.0"

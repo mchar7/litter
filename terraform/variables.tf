@@ -85,6 +85,13 @@ variable "app_image_tag" {
   default     = "latest"
 }
 
+variable "app_helm_overrides_path" {
+  type        = string
+  description = "Path to the Helm override file (use to override 'values.common.yaml', relative to 'chart' directory)"
+  default     = null
+  nullable    = true
+}
+
 # health probe path for Azure Load Balancer
 variable "app_health_probe_path" {
   type        = string
