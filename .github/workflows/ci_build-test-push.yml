@@ -42,7 +42,7 @@ jobs:
 
       # Upload JAR artifact for main branch builds and PR builds targeting main
       - name: Upload JAR artifact
-        if: ${{ is_default_branch || (github.event_name == 'pull_request' && github.base_ref == 'main') }}
+        if: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main') }}
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
         with:
           name: litter-jar
@@ -53,7 +53,7 @@ jobs:
     needs: build-and-test
     runs-on: ubuntu-latest
     # Run for main branch or PRs targeting main
-    if: ${{ is_default_branch || (github.event_name == 'pull_request' && github.base_ref == 'main') }}
+    if: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main') }}
     permissions:
       contents: read
       packages: write
