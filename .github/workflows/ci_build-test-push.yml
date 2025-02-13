@@ -4,7 +4,9 @@
 name: CI
 on:
   push: { }
-  pull_request: { }
+  pull_request:
+    branches:
+      - main
   workflow_dispatch: { }
 
 jobs:
@@ -31,6 +33,12 @@ jobs:
 
       - name: Execute Gradle build (with tests)
         run: ./gradlew build
+
+      - name: Debug
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Base ref: ${{ github.event.pull_request.base.ref }}"
+          echo "Head ref: ${{ github.event.pull_request.head.ref }}"
 
       # If run was triggered by a pull request or manual run, upload the JAR artifact (if needed)
       - name: Upload JAR artifact
