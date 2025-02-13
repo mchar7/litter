@@ -161,7 +161,6 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             CI_TRIGGER_EVENT="${{ github.event.workflow_run.event_name }}"
             if [[ "$CI_TRIGGER_EVENT" == "pull_request" ]]; then
-              # For PR events, tag as pr-<pr number>
               pr_number="${{ github.event.workflow_run.event.pull_request.number }}"
               imageTag="pr-${pr_number}"
             else
