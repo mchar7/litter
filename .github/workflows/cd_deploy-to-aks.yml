@@ -152,6 +152,8 @@ jobs:
       # Azure credentials (cannot use azure/login action with service principal)
       #   See: https://github.com/hashicorp/terraform-provider-azurerm/issues/22034
       ARM_USE_OIDC: true
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       TERRAFORM_WORKING_DIR: "./terraform"
     environment:
       name: ${{ needs.prepare-deployment.outputs.environment_name }}
