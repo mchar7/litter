@@ -3,6 +3,7 @@ package org.ac.cst8277.chard.matt.litter.service;
 import org.ac.cst8277.chard.matt.litter.model.User;
 import org.ac.cst8277.chard.matt.litter.repository.UserRepository;
 import org.ac.cst8277.chard.matt.litter.security.JwtUtils;
+import org.ac.cst8277.chard.matt.litter.security.LogSanitizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -114,17 +115,18 @@ public class UserManagementService {
      */
     public Mono<User> register(String username, String password) {
         if (isUsernameErroneous(username)) {
-            logger.warn("Attempt to register with invalid username: {}", username);
+            logger.warn("Attempt to register with invalid username: {}", LogSanitizer.sanitize(username));
             return Mono.error(new IllegalArgumentException(USERNAME_INVALID_MESSAGE));
         }
         if (isPasswordWeak(password)) {
-            logger.warn("Attempt to register with insecure password. Username: {}", username);
+            logger.warn("Attempt to register with insecure password. Username: {}", LogSanitizer.sanitize(username));
             return Mono.error(new IllegalArgumentException(PASSWORD_INSECURE_MESSAGE));
         }
+
         return userRepository.findByUsername(username)
                 // run through passwordMeetsRequirements to ensure data is valid
                 .flatMap(existingUser -> {
-                    logger.warn("Attempt to register existing username: {}", username);
+                    logger.warn("Attempt to register existing username: {}", LogSanitizer.sanitize(username));
                     return Mono.<User>error(new IllegalArgumentException(USERNAME_TAKEN_MESSAGE));
                 })
                 .switchIfEmpty(Mono.defer(() -> {
@@ -132,7 +134,7 @@ public class UserManagementService {
                     user.setUsername(username);
                     user.setPasswordHash(passwordEncoder.encode(password));
                     user.setRoles(List.of(User.DB_USER_ROLE_SUBSCRIBER_NAME));
-                    logger.info("Registering new user: {}", username);
+                    logger.info("Registering new user: {}", LogSanitizer.sanitize(username));
                     return userRepository.save(user);
                 }));
     }
@@ -146,11 +148,11 @@ public class UserManagementService {
      */
     public Mono<String> login(String username, String password) {
         if (isUsernameErroneous(username)) {
-            logger.warn("Attempt to login with invalid username: {}", username);
+            logger.warn("Attempt to login with invalid username: {}", LogSanitizer.sanitize(username));
             return Mono.error(new IllegalArgumentException(USERNAME_INVALID_MESSAGE));
         }
         if (isPasswordWeak(password)) {
-            logger.warn("Attempt to login with insecure password. Username: {}", username);
+            logger.warn("Attempt to login with insecure password. Username: {}", LogSanitizer.sanitize(username));
             return Mono.error(new IllegalArgumentException(PASSWORD_INSECURE_MESSAGE));
         }
         return userRepository.findByUsername(username)
@@ -158,7 +160,7 @@ public class UserManagementService {
                 .switchIfEmpty(Mono.error(new BadCredentialsException(USER_NOT_FOUND_MESSAGE)))
                 .filter(user -> passwordEncoder.matches(password, user.getPasswordHash()))
                 .map(user -> {
-                    logger.info("User logged in successfully: {}", username);
+                    logger.info("User logged in successfully: {}", LogSanitizer.sanitize(username));
                     return jwtUtils.generateToken(user);
                 })
                 .switchIfEmpty(Mono.error(new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE)));

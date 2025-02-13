@@ -1,6 +1,7 @@
 package org.ac.cst8277.chard.matt.litter.controller;
 
 import org.ac.cst8277.chard.matt.litter.model.User;
+import org.ac.cst8277.chard.matt.litter.security.LogSanitizer;
 import org.ac.cst8277.chard.matt.litter.service.UserManagementService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +39,7 @@ public class UserManagementController {
         userManagementService = usrMgmtSvc;
     }
 
-    private static boolean isRegisterBodyValid(CharSequence username, CharSequence password) {
+    private static boolean isRegisterBodyInvalid(CharSequence username, CharSequence password) {
         return null == username || null == password || username.isEmpty() || password.isEmpty();
     }
 
@@ -53,14 +54,14 @@ public class UserManagementController {
         String username = registerInfo.get(USERNAME_KEY);
         String password = registerInfo.get(PASSWORD_KEY);
 
-        if (isRegisterBodyValid(username, password)) {
+        if (isRegisterBodyInvalid(username, password)) {
             logger.warn("Registration attempt with invalid input");
             return Mono.just(ResponseEntity.badRequest().build());
         }
 
         return userManagementService.register(username, password)
                 .map(user -> {
-                    logger.info("User registered successfully: {}", username);
+                    logger.info("User registered successfully: {}", user.getUsername());
                     return ResponseEntity.status(HttpStatus.CREATED).body(user);
                 })
                 .onErrorResume(e -> {
@@ -82,11 +83,11 @@ public class UserManagementController {
 
         return userManagementService.login(username, password)
                 .map(token -> {
-                    logger.info("User logged in successfully: {}", username);
+                    logger.info("User logged in successfully: {}", LogSanitizer.sanitize(username));
                     return ResponseEntity.ok(token);
                 })
                 .onErrorResume(BadCredentialsException.class, e -> {
-                    logger.warn("Failed login attempt for username: {}", username);
+                    logger.warn("Failed login attempt for username: {}", LogSanitizer.sanitize(username));
                     return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials"));
                 })
                 .onErrorResume(IllegalArgumentException.class, e -> {

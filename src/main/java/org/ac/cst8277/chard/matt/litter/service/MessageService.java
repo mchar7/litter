@@ -4,6 +4,7 @@ import org.ac.cst8277.chard.matt.litter.model.Message;
 import org.ac.cst8277.chard.matt.litter.model.User;
 import org.ac.cst8277.chard.matt.litter.repository.MessageRepository;
 import org.ac.cst8277.chard.matt.litter.repository.SubscriptionRepository;
+import org.ac.cst8277.chard.matt.litter.security.LogSanitizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,14 +60,15 @@ public class MessageService {
         return userManagementService.getUserByJwt(jwt)
                 .flatMap(user -> {
                     if (!user.getRoles().contains(User.DB_USER_ROLE_PRODUCER_NAME)) {
-                        logger.warn("User {} attempted to create a message without producer role", user.getUsername());
+                        logger.warn("User {} attempted to create a message without producer role",
+                                LogSanitizer.sanitize(user.getUsername()));
                         return Mono.error(new IllegalArgumentException("User does not have producer privileges."));
                     }
                     Message message = new Message();
                     message.setContent(content);
                     message.setProducerId(user.getId());
                     message.setTimestamp(Instant.now());
-                    logger.info("Creating message for user: {}", user.getUsername());
+                    logger.info("Creating message for user: {}", LogSanitizer.sanitize(user.getUsername()));
                     return messageRepository.save(message);
                 })
                 .doOnSuccess(message ->
@@ -81,8 +83,7 @@ public class MessageService {
      * @return Mono indicating the result of the delete operation
      */
     public Mono<Void> deleteMessage(String id, JwtClaimAccessor jwt) {
-        logger.info("Attempting to delete message with id: {}", id);
-
+        logger.info("Attempting to delete message with id: {}", LogSanitizer.sanitize(id));
         return userManagementService.getUserByJwt(jwt)
                 .flatMap(user -> messageRepository.findById(id)
                         .switchIfEmpty(Mono.error(new IllegalArgumentException("Message not found.")))
@@ -94,7 +95,8 @@ public class MessageService {
                                         new IllegalArgumentException("User is not authorized to delete this message."));
                             }
 
-                            logger.info("User {} deleted message with id: {}", user.getUsername(), id);
+                            logger.info("User {} deleted message with id: {}",
+                                    LogSanitizer.sanitize(user.getUsername()), LogSanitizer.sanitize(id));
                             return messageRepository.deleteById(id);
                         })
                 );
@@ -107,9 +109,10 @@ public class MessageService {
      * @return Mono of the message if found
      */
     public Mono<Message> getMessageById(String id) {
-        logger.info("Fetching message with id: {}", id);
+        logger.info("Fetching message with id: {}", LogSanitizer.sanitize(id));
         return messageRepository.findById(id)
-                .doOnSuccess(message -> logger.info("Retrieved message with id: {}", id))
+                .doOnSuccess(message ->
+                        logger.info("Retrieved message with id: {}", LogSanitizer.sanitize(id)))
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Message not found.")));
     }
 
@@ -120,10 +123,11 @@ public class MessageService {
      * @return Mono containing a Flux of messages or an empty Flux if no messages are found
      */
     public Mono<Flux<Message>> getMessagesForProducer(String producerUsername) {
-        logger.info("Fetching messages for producer: {}", producerUsername);
+        logger.info("Fetching messages for producer: {}", LogSanitizer.sanitize(producerUsername));
         return userManagementService.getUserByUsername(producerUsername)
                 .map(producer -> messageRepository.findByProducerId(producer.getId()))
-                .doOnSuccess(messages -> logger.info("Retrieved messages for producer: {}", producerUsername));
+                .doOnSuccess(messages ->
+                        logger.info("Retrieved messages for producer: {}", LogSanitizer.sanitize(producerUsername)));
     }
 
     /**
@@ -138,7 +142,7 @@ public class MessageService {
                     if (!subscriber.getRoles().contains(User.DB_USER_ROLE_SUBSCRIBER_NAME)) {
                         return Mono.error(new IllegalArgumentException("User is not a subscriber."));
                     }
-                    logger.info("Fetching messages for subscriber: {}", subscriber.getUsername());
+                    logger.info("Fetching messages for subscriber: {}", LogSanitizer.sanitize(subscriber.getUsername()));
                     return Mono.just(subscriptionRepository.findBySubscriberId(subscriber.getId())
                             .flatMap(subscription -> messageRepository.findByProducerId(subscription.getProducerId())));
                 })

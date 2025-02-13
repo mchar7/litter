@@ -1,6 +1,7 @@
 package org.ac.cst8277.chard.matt.litter.controller;
 
 import org.ac.cst8277.chard.matt.litter.model.Subscription;
+import org.ac.cst8277.chard.matt.litter.security.LogSanitizer;
 import org.ac.cst8277.chard.matt.litter.service.SubscriptionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,13 +44,14 @@ public class SubscriptionController {
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable String producerUsername) {
         if (null == producerUsername || producerUsername.isEmpty()) {
-            logger.warn("Attempt to create subscription with invalid producer username");
+            logger.warn("Attempt to create subscription with invalid producer username: {}",
+                    LogSanitizer.sanitize(producerUsername));
             return Mono.just(ResponseEntity.badRequest().build());
         }
-
         return subscriptionService.subscribe(jwt, producerUsername)
                 .map(subscription -> {
-                    logger.info("Subscription created: user {} subscribed to {}", jwt.getSubject(), producerUsername);
+                    logger.info("Subscription created: user {} subscribed to {}",
+                            LogSanitizer.sanitize(jwt.getSubject()), LogSanitizer.sanitize(producerUsername));
                     return ResponseEntity.ok(subscription);
                 })
                 .onErrorResume(e -> {
@@ -77,11 +79,8 @@ public class SubscriptionController {
         return subscriptionService.unsubscribe(jwt, producerUsername)
                 .then(Mono.defer(() -> {
                     // log the success
-                    logger.info(
-                            "Subscription deleted: user {} unsubscribed from {}",
-                            jwt.getSubject(),
-                            producerUsername
-                    );
+                    logger.info("Subscription deleted: user {} unsubscribed from {}",
+                            LogSanitizer.sanitize(jwt.getSubject()), LogSanitizer.sanitize(producerUsername));
                     // force <Void> here, returning 204 No Content
                     return Mono.just(ResponseEntity.noContent().<Void>build());
                 }))

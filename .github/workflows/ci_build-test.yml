@@ -1,7 +1,5 @@
 # This workflow verifies that the code compiles & tests pass on every commit, PR, or manual run.
 name: CI - Build and Test
-permissions:
-  contents: read
 on:
   push: { }
   pull_request: { }
@@ -10,22 +8,24 @@ on:
 jobs:
   build-with-gradle:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 5
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           # Use pull request head ref if triggered by a pull request, otherwise use current ref
           ref: ${{ github.event.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref }}
 
       - name: Set up JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12
         with:
           distribution: 'corretto'
           java-version: '21'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@94baf225fe0a508e581a564467443d0e2379123b
 
       - name: Execute Gradle build (with tests)
         run: ./gradlew build

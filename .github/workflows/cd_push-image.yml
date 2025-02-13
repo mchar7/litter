@@ -3,9 +3,6 @@
 # It is triggered automatically when the build workflow completes on the main branch,
 #   or it can be triggered manually via workflow_dispatch (optionally passing a build_run_id).
 name: CD - Push Image
-permissions:
-  contents: read
-  packages: write
 on:
   workflow_run:
     workflows: [ CI - Build and Test ]
@@ -22,10 +19,13 @@ on:
 jobs:
   push-image:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     timeout-minutes: 5
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       # Determine the build run ID:
       - name: Determine Build Run ID
@@ -39,7 +39,7 @@ jobs:
 
       # Download the artifact using the download-artifact action
       - name: Download JAR Artifact from Build Workflow
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
           name: litter-jar
           run-id: ${{ steps.determine-run.outputs.BUILD_RUN_ID }}
@@ -67,7 +67,7 @@ jobs:
           echo "app_version=$version" >> $GITHUB_OUTPUT
 
       - name: Log into container registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
         with:
           registry: "ghcr.io"
           username: ${{ github.actor }}
@@ -75,7 +75,7 @@ jobs:
 
       - name: Prepare Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@369eb591f429131d6889c46b94e711f089e6ca96
         with:
           images: |
             ${{ steps.image-path.outputs.image_path }}
@@ -85,7 +85,7 @@ jobs:
           flavor: latest=true # This will tag the image with 'latest' as well as SHA and app version
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@ca877d9245402d1537745e0e356eab47c3520991
         with:
           context: .
           file: ./Dockerfile
