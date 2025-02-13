@@ -99,7 +99,6 @@ class WebSecurityConfig {
                 .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
-                .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(AUTH_WHITELIST).permitAll()
                         .pathMatchers(AUTH_ADMIN_ONLY).hasRole(User.DB_USER_ROLE_ADMIN_NAME)
