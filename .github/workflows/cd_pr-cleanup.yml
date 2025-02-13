@@ -11,7 +11,7 @@ jobs:
     # Only run cleanup for PRs that are closed without merge or after merge (cleanup applies in both cases)
     if: ${{ github.event.pull_request.state == 'closed' }}
     env:
-      working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+      TERRAFORM_WORKING_DIR: "./terraform"
     permissions:
       contents: read
     timeout-minutes: 10 # this may take a while
