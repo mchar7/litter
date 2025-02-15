@@ -2,8 +2,6 @@
 # It is triggered automatically when the CI workflow completes (for both PR and main branch deployments),
 #   or it can be triggered manually via workflow_dispatch.
 name: CD - Deploy to AKS
-env:
-  ROOT_DOMAIN: "litter.dev"
 permissions: { } # default to minimal permission, overriding in jobs only as needed
 on:
   # Trigger deployment after successful CI run (for both merged commits and PR builds)
@@ -30,34 +28,45 @@ on:
         options:
           - "Let's Encrypt - Production"  # Ideal when deploying to publicly accessible domain
           - "Let's Encrypt - Staging"     # Ideal when frequently testing deployment (avoid rate limits on prod server)
-
 jobs:
   # If triggered by a workflow_run, ensure the CI was successful. If not, skip deployment
   check-context:
-    if: ${{ github.event.event_name == 'workflow_run' }}
     runs-on: ubuntu-latest
-    outputs:
-      is_main_pr: ${{ steps.check-if-pr.outputs.is_main_pr }}
     steps:
-      - name: Check if CI was successful
+      - name: Get the workflow's triggering context
         run: |
-          if [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
-              echo "CI was successful"
+          if [[ "${{ github.event.workflow_run.event_name }}" == "workflow_dispatch" ]]; then
+            echo "Workflow triggered manually"
+          elif [[ "${{ github.event.workflow_run.event_name }}" == "pull_request" ]]; then
+            echo "This workflow was triggered by the CI workflow's completion. CI was triggered by a pull request."
+            # could use 'break' here and combine with the next step(s), but this is more explicit
           else
-              echo "CI failed; skipping deployment"; exit 1
+            echo "Error: Unsupported event '${{ github.event.workflow_run.event_name }}'."; exit 1
           fi
 
-      - name: Check if PR to main
+      - name: Get context on pull request
+        if: ${{ github.event.workflow_run.event_name == 'pull_request' }}
+        id: get-pr-context
         run: |
-          if [[ "${{ github.event.workflow_run.event_name }}" == "pull_request" ]]; then
-            if [[ "${{ github.event.workflow_run.event.pull_request.base.ref }}" == "main" ]]; then
-              isMainPR=true
-              echo is_main_pr=$isMainPR >> $GITHUB_OUTPUT
-            fi
+          if [[ "${{ github.event.workflow_run.event.pull_request.base.ref }}" == "main" ]]; then
+            echo "PR is to main branch."
           fi
+          # given this workflow is triggered by the CI workflow, we enforce that the CI was successful before proceeding
+          if [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
+              echo "CI was successful."
+          else
+              echo "CI failed; skipping deployment (workflow will quit here)."; exit 1
+          fi
+          # extra info for debugging
+          echo "PR base ref: ${{ github.event.workflow_run.event.pull_request.base.ref }}"
+          echo "PR head ref: ${{ github.event.workflow_run.event.pull_request.head.ref }}"
+          echo "PR number: ${{ github.event.workflow_run.event.pull_request.number }}"
+          echo "PR title: ${{ github.event.workflow_run.event.pull_request.title }}"
 
   prepare-deployment:
     runs-on: ubuntu-latest
+    env:
+      ROOT_DOMAIN: "litter.dev"
     outputs:
       image_path: ${{ steps.image-path.outputs.image_path }}
       image_tag: ${{ steps.determine-image-tag.outputs.image_tag }}
@@ -184,7 +193,6 @@ jobs:
         id: select-helm-overrides
         run: |
           ENV_CODE="${{ steps.determine-env.outputs.environment_code }}"
-          
           if [[ "$ENV_CODE" == "prod" ]]; then
             OVERRIDES="./chart/values.prod.yaml"
           elif [[ "$ENV_CODE" == "staging" || "$ENV_CODE" =~ ^pr-.*-staging$ ]]; then
@@ -192,7 +200,6 @@ jobs:
           else
             OVERRIDES="./chart/values.dev.yaml"
           fi
-          
           echo "app_helm_overrides_path=$OVERRIDES" >> $GITHUB_OUTPUT
           echo "Selected override file: $OVERRIDES"
 
