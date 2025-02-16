@@ -35,17 +35,17 @@ jobs:
     steps:
       - name: Get the workflow's triggering context
         run: |
-          if [[ "${{ github.event.workflow_run.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "${{ github.event.workflow_run.event }}" == "workflow_dispatch" ]]; then
             echo "Workflow triggered manually"
-          elif [[ "${{ github.event.workflow_run.event_name }}" == "pull_request" ]]; then
+          elif [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
             echo "This workflow was triggered by the CI workflow's completion. CI was triggered by a pull request."
             # could use 'break' here and combine with the next step(s), but this is more explicit
           else
-            echo "Error: Unsupported event '${{ github.event.workflow_run.event_name }}'."; exit 1
+            echo "Error: Unsupported event '${{ github.event.workflow_run.event }}'."; exit 1
           fi
 
       - name: Get context on pull request
-        if: ${{ github.event.workflow_run.event_name == 'pull_request' }}
+        if: ${{ github.event.workflow_run.event == 'pull_request' }}
         id: get-pr-context
         run: |
           if [[ "${{ github.event.workflow_run.event.pull_request.base.ref }}" == "main" ]]; then
@@ -110,7 +110,7 @@ jobs:
                 ;;
             esac
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            CI_TRIGGER_EVENT="${{ github.event.workflow_run.event_name }}"
+            CI_TRIGGER_EVENT="${{ github.event.workflow_run.event }}"
             if [[ "$CI_TRIGGER_EVENT" == "pull_request" ]]; then
               pr_number="${{ github.event.workflow_run.event.pull_request.number }}"
               environmentName="PR Staging: #$pr_number"
@@ -168,7 +168,7 @@ jobs:
         id: determine-image-tag
         run: |
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            CI_TRIGGER_EVENT="${{ github.event.workflow_run.event_name }}"
+            CI_TRIGGER_EVENT="${{ github.event.workflow_run.event }}"
             if [[ "$CI_TRIGGER_EVENT" == "pull_request" ]]; then
               pr_number="${{ github.event.workflow_run.event.pull_request.number }}"
               imageTag="pr-${pr_number}"
@@ -254,7 +254,7 @@ jobs:
 
       - name: Select Terraform workspace
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-        run: terraform workspace select ${{ needs.prepare-deployment.outputs.environment_code }}
+        run: terraform workspace select -or-create ${{ needs.prepare-deployment.outputs.environment_code }}
 
       - name: Terraform validate
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
