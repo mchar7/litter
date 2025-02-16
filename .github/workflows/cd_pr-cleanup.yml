@@ -65,7 +65,7 @@ jobs:
 
       - name: Select Terraform workspace
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-        run: terraform workspace select ${{ steps.determine_env_code.outputs.env_code }}
+        run: terraform workspace select -or-create ${{ steps.determine_env_code.outputs.env_code }}
 
       - name: Terraform destroy
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}

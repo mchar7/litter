@@ -29,50 +29,67 @@ on:
           - "Let's Encrypt - Production"  # Ideal when deploying to publicly accessible domain
           - "Let's Encrypt - Staging"     # Ideal when frequently testing deployment (avoid rate limits on prod server)
 jobs:
-  # If triggered by a workflow_run, ensure the CI was successful. If not, skip deployment
   check-context:
     runs-on: ubuntu-latest
     outputs:
-      is_pr_to_main: ${{ steps.get-pr-context.outputs.is_pr_to_main }}
+      should_deploy: ${{ steps.should-deploy.outputs.should_deploy }}
     steps:
-      - name: Get the workflow's triggering context
+      - name: Get context of workflow trigger
+        id: context-check
         run: |
           if [[ "${{ github.event.workflow_run.event }}" == "workflow_dispatch" ]]; then
-            echo "Workflow triggered manually"
-          elif [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
-            echo "This workflow was triggered by the CI workflow's completion. CI was triggered by a pull request."
-            # could use 'break' here and combine with the next step(s), but this is more explicit
+            echo "Workflow triggered manually."
+
           elif [[ "${{ github.event.workflow_run.event }}" == "push" ]]; then
-            echo "This workflow was triggered by the CI workflow's completion. CI was triggered by a push event."
-            echo "The deployment will not be run."; exit 0
+            echo "CD triggered by CI workflow's completion. CI triggered by a push event."
+
+            if [[ "${{ github.event.workflow_run.head.ref }}" == "main" ]]; then
+              echo "Commit was pushed to main branch."
+            else
+              echo "Commit was not pushed to main."
+              echo "deploymentRoadblock=true" >> $GITHUB_ENV
+            fi
+
+          elif [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
+            echo "CD triggered by CI workflow's completion. CI triggered by a pull request event."
+
+            if [[ "${{ github.event.workflow_run.pull_request.base.ref }}" == "main" ]]; then
+              echo "The PR is targeting the main branch."
+            else
+              echo "The PR is not targeting the main branch."
+              echo "deploymentRoadblock=true" >> $GITHUB_ENV
+            fi
           else
-            echo "Error: Unsupported event '${{ github.event.workflow_run.event }}'."; exit 1
+            echo "Error: Unsupported event '${{ github.event.workflow_run.event }}'."
+            echo "deploymentRoadblock=true" >> $GITHUB_ENV
           fi
 
-      - name: Get context on pull request
-        if: ${{ github.event.workflow_run.event == 'pull_request' }}
-        id: get-pr-context
+      - name: Ensure CI success
+        if: ${{ github.event_name == 'workflow_run' }}
         run: |
-          if [[ "${{ github.event.workflow_run.event.pull_request.base.ref }}" == "main" ]]; then
-            echo "PR is to main branch."
-            echo "is_pr_to_main=true" >> $GITHUB_OUTPUT
-          fi
-          # given this workflow is triggered by the CI workflow, we enforce that the CI was successful before proceeding
           if [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
               echo "CI was successful."
           else
-              echo "CI failed; skipping deployment (workflow will quit here)."; exit 1
+              echo "CI failed."
+              echo "deploymentRoadblock=true" >> $GITHUB_ENV
           fi
-          # extra info for debugging
-          echo "PR base ref: ${{ github.event.workflow_run.event.pull_request.base.ref }}"
-          echo "PR head ref: ${{ github.event.workflow_run.event.pull_request.head.ref }}"
-          echo "PR number: ${{ github.event.workflow_run.event.pull_request.number }}"
-          echo "PR title: ${{ github.event.workflow_run.event.pull_request.title }}"
+
+      - name: Should deploy?
+        id: should-deploy
+        run: |
+          if [[ "$deploymentRoadblock" == 'true' ]]; then
+            echo "Deployment blocked."
+            shouldDeploy=false
+          else
+            echo "Deployment will proceed."
+            shouldDeploy=true
+          fi
+          echo "should_deploy=$shouldDeploy" >> $GITHUB_OUTPUT
 
   prepare-deployment:
     needs: [ check-context ]
     runs-on: ubuntu-latest
-    if: ${{ needs.check-context.outputs.is_pr_to_main == 'true' || github.event.workflow_run.event == 'workflow_dispatch' }}
+    if: ${{ needs.check-context.outputs.should_deploy == 'true' }}
     env:
       ROOT_DOMAIN: "litter.dev"
     outputs:
@@ -214,7 +231,7 @@ jobs:
   deploy-to-aks:
     needs: [ prepare-deployment, check-context ]
     runs-on: ubuntu-latest
-    if: ${{ needs.check-context.outputs.is_pr_to_main == 'true' || github.event.workflow_run.event == 'workflow_dispatch' }}
+    if: ${{ needs.check-context.outputs.should_deploy == 'true' || github.event.workflow_run.event == 'workflow_dispatch' }}
     env:
       # Azure credentials (cannot use azure/login action with service principal)
       #   See: https://github.com/hashicorp/terraform-provider-azurerm/issues/22034
