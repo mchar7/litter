@@ -32,6 +32,8 @@ jobs:
   # If triggered by a workflow_run, ensure the CI was successful. If not, skip deployment
   check-context:
     runs-on: ubuntu-latest
+    outputs:
+      is_pr_to_main: ${{ steps.get-pr-context.outputs.is_pr_to_main }}
     steps:
       - name: Get the workflow's triggering context
         run: |
@@ -40,6 +42,9 @@ jobs:
           elif [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
             echo "This workflow was triggered by the CI workflow's completion. CI was triggered by a pull request."
             # could use 'break' here and combine with the next step(s), but this is more explicit
+          elif [[ "${{ github.event.workflow_run.event }}" == "push" ]]; then
+            echo "This workflow was triggered by the CI workflow's completion. CI was triggered by a push event."
+            echo "The deployment will not be run."; exit 0
           else
             echo "Error: Unsupported event '${{ github.event.workflow_run.event }}'."; exit 1
           fi
@@ -50,6 +55,7 @@ jobs:
         run: |
           if [[ "${{ github.event.workflow_run.event.pull_request.base.ref }}" == "main" ]]; then
             echo "PR is to main branch."
+            echo "is_pr_to_main=true" >> $GITHUB_OUTPUT
           fi
           # given this workflow is triggered by the CI workflow, we enforce that the CI was successful before proceeding
           if [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
@@ -64,7 +70,9 @@ jobs:
           echo "PR title: ${{ github.event.workflow_run.event.pull_request.title }}"
 
   prepare-deployment:
+    needs: [ check-context ]
     runs-on: ubuntu-latest
+    if: ${{ needs.check-context.outputs.is_pr_to_main == 'true' || github.event.workflow_run.event == 'workflow_dispatch' }}
     env:
       ROOT_DOMAIN: "litter.dev"
     outputs:
@@ -122,7 +130,7 @@ jobs:
           else
             echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
           fi
-          environmentURL="https://${{ steps.determine-env.outputs.environment_code }}.${{ env.ROOT_DOMAIN }}"
+          environmentURL="https://$environmentCode.$ROOT_DOMAIN"
 
           echo "environment_name=$environmentName"  >> $GITHUB_OUTPUT
           echo "environment_code=$environmentCode"  >> $GITHUB_OUTPUT
@@ -204,8 +212,9 @@ jobs:
           echo "Selected override file: $OVERRIDES"
 
   deploy-to-aks:
-    needs: prepare-deployment
+    needs: [ prepare-deployment, check-context ]
     runs-on: ubuntu-latest
+    if: ${{ needs.check-context.outputs.is_pr_to_main == 'true' || github.event.workflow_run.event == 'workflow_dispatch' }}
     env:
       # Azure credentials (cannot use azure/login action with service principal)
       #   See: https://github.com/hashicorp/terraform-provider-azurerm/issues/22034

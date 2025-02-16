@@ -11,6 +11,12 @@ jobs:
     # Only run cleanup for PRs that are closed without merge or after merge (cleanup applies in both cases)
     if: ${{ github.event.pull_request.state == 'closed' }}
     env:
+      # Azure credentials (cannot use azure/login action with service principal)
+      #   See: https://github.com/hashicorp/terraform-provider-azurerm/issues/22034
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TERRAFORM_WORKING_DIR: "./terraform"
     permissions:
       contents: read
@@ -20,7 +26,7 @@ jobs:
         id: determine_env_code
         run: |
           envCode=pr-${{ github.event.pull_request.number }}-staging
-          echo "env_code=$envCode" >> $GITHUB_ENV
+          echo "env_code=$envCode" >> $GITHUB_OUTPUT
           echo "Environment code: $envCode"
         shell: bash
 

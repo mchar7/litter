@@ -87,7 +87,7 @@ variable "app_image_tag" {
 
 variable "app_helm_overrides_path" {
   type        = string
-  description = "Path to the Helm override file (use to override 'values.common.yaml', relative to 'chart' directory)"
+  description = "Path to the Helm override file (use to override 'values.common.yaml', relative to the project root)"
   default     = null
   nullable    = true
 }
