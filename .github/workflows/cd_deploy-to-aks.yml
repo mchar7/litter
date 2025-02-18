@@ -55,10 +55,10 @@ jobs:
             if [[ "${{ github.event.workflow_run.event }}" == "push" ]]; then
               echo "CI triggered by a push event."
           
-              if [[ "$WF_RUN_REF" == "main" ]]; then
+              if [[ "$WF_RUN_HEAD" == "main" ]]; then
                 echo "Commit was pushed to main branch."
               else
-                echo "Commit was pushed to ${WF_RUN_REF}, not the main branch."
+                echo "Commit was pushed to ${WF_RUN_HEAD}, not the main branch."
                 echo "deploymentRoadblock=true" >> $GITHUB_ENV
               fi
 
