@@ -1,5 +1,5 @@
-# This workflow automatically cleans up ephemeral PR deployment environments when
-#   a pull request is closed (without merging) to avoid resource proliferation.
+# This workflow automatically cleans up ephemeral PR staging environment when a PR
+#   targeting the main branch is closed to avoid unnecessary Azure costs.
 name: PR Cleanup
 on:
   pull_request:
@@ -8,6 +8,7 @@ on:
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+    if: github.event.pull_request.base.ref == 'main' # only run on PRs to main
     env:
       # Azure credentials (cannot use azure/login action with service principal)
       #   See: https://github.com/hashicorp/terraform-provider-azurerm/issues/22034
@@ -20,14 +21,6 @@ jobs:
       contents: read
     timeout-minutes: 10 # this may take a while
     steps:
-      - name: Determine environment code
-        id: determine_env_code
-        run: |
-          envCode=pr-${{ github.event.pull_request.number }}-staging
-          echo "env_code=$envCode" >> $GITHUB_OUTPUT
-          echo "Environment code: $envCode"
-        shell: bash
-
       - name: Git checkout for Terraform files
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -68,4 +61,4 @@ jobs:
           terraform destroy -auto-approve \
             -var-file=example.tfvars \
             -var="az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
-            -var="app_environment=${{ steps.determine_env_code.outputs.env_code }}"
+            -var="app_environment=staging"
