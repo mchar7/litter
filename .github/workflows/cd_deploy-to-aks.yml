@@ -38,6 +38,7 @@ jobs:
       WF_RUN_HEAD: "${{ github.event.workflow_run.head_branch }}"
       WF_RUN_PR_BASE: "${{ github.event.workflow_run.pull_requests[0].base.ref }}"
       GITHUB_CONTEXT: ${{ toJson(github) }}
+      PR_CONTEXT: ${{ toJson(github.event.workflow_run.pull_requests) }}
     outputs:
       should_deploy: ${{ steps.should-deploy.outputs.should_deploy }}
     steps:
@@ -52,12 +53,12 @@ jobs:
 
           echo "Workflow trigger context:"
           echo "full context: '$GITHUB_CONTEXT'"
-          echo "json for pull_requests: ${{ toJson(github.event.workflow_run.pull_requests) }}"
+          echo "json for pull_requests: '$PR_CONTEXT'"
           
           # use jq to parse the JSON context and provide certain values
-          echo "pull_requests full array: $(echo $GITHUB_CONTEXT | jq '.event.pull_requests')"
-          echo "pull_requests first element: $(echo $GITHUB_CONTEXT | jq '.event.pull_requests[0]')"
-          echo "pull_requests first element base ref: $(echo $GITHUB_CONTEXT | jq '.event.pull_requests[0].base.ref')"
+          echo "pull_requests full array: $(echo $PR_CONTEXT | jq '.event.pull_requests')"
+          echo "pull_requests first element: $(echo $PR_CONTEXT | jq '.event.pull_requests[0]')"
+          echo "pull_requests first element base ref: $(echo $PR_CONTEXT | jq '.event.pull_requests[0].base.ref')"
           
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "Workflow triggered manually."
