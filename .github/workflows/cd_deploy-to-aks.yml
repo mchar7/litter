@@ -165,9 +165,9 @@ jobs:
             esac
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             if [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
-              pr_number="${{ github.event.workflow_run.event.pull_request.number }}"
-              environmentName="PR Staging: #$pr_number"
-              environmentCode="pr-${pr_number}-staging"
+              prNum="${{ github.event.workflow_run.event.pull_requests[0].number }}"
+              environmentName="PR Staging: #$prNum"
+              environmentCode="pr-${prNum}-staging"
             else
               environmentName="Production"
               environmentCode="prod"
@@ -226,8 +226,8 @@ jobs:
             CI_TRIGGER_EVENT="${{ github.event.workflow_run.event }}"
             if [[ "$CI_TRIGGER_EVENT" == "pull_request" ]]; then
               # For PR events, tag as pr-<pr number>
-              pr_number="${{ github.event.workflow_run.event.pull_request.number }}"
-              imageTag="pr-${pr_number}"
+              prNum="${{ github.event.workflow_run.event.pull_requests[0].number }}"
+              imageTag="pr-${prNum}"
             else
               imageTag="sha-$shaShort"
             fi
