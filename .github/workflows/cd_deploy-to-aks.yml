@@ -197,11 +197,12 @@ jobs:
         # Determine the correct Docker image tag based on the triggering context:
         # - For workflow_run:
         #   - If the triggering event is a pull request, tag with "pr-<pr number>"
-        #   - Otherwise, for push events (merged to main) tag with the commit SHA
-        # - For manual (workflow_dispatch), default to the "latest" tag
+        #   - Otherwise, for push events (merged to main) use the short SHA tag
+        # - For manual (workflow_dispatch), default to the short SHA tag
       - name: Determine Image Tag
         id: determine-image-tag
         run: |
+          shaShort=${GITHUB_SHA::7}
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             CI_TRIGGER_EVENT="${{ github.event.workflow_run.event }}"
             if [[ "$CI_TRIGGER_EVENT" == "pull_request" ]]; then
@@ -209,10 +210,10 @@ jobs:
               pr_number="${{ github.event.workflow_run.event.pull_request.number }}"
               imageTag="pr-${pr_number}"
             else
-              imageTag="${{ github.event.workflow_run.head_sha }}"
+              imageTag == "sha-$shaShort"
             fi
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            imageTag="latest"
+            imageTag="sha-$shaShort"
           else
             echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
           fi

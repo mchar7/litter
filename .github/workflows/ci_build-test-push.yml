@@ -154,6 +154,10 @@ jobs:
       - name: Prepare Docker metadata
         id: meta
         uses: docker/metadata-action@369eb591f429131d6889c46b94e711f089e6ca96
+        env:
+          # Use the SHA of the PR head commit, not the temporary merge commit
+          #   See: https://github.com/docker/metadata-action/issues/283
+          DOCKER_METADATA_PR_HEAD_SHA: true
         with:
           images: |
             ${{ steps.image-path.outputs.image_path }}
