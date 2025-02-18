@@ -9,7 +9,7 @@ resource "azurerm_resource_group" "litter_k8s_rg" {
 }
 
 resource "azurerm_kubernetes_cluster" "aks" {
-  name                      = "aks-cluster-${var.app_name}-${var.app_environment}"
+  name                      = "aks-cluster-${var.app_name}"
   dns_prefix                = "${var.app_name}-${var.app_environment}"
   location                  = azurerm_resource_group.litter_k8s_rg.location
   resource_group_name       = azurerm_resource_group.litter_k8s_rg.name
