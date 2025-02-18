@@ -32,6 +32,7 @@ class WebSecurityConfig {
     private static final String[] AUTH_WHITELIST = {
             "/user/login",
             "/user/register",
+            "/actuator/health",
     };
 
     private static final String[] AUTH_ADMIN_ONLY = {
