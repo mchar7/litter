@@ -60,7 +60,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           # Use pull request head ref if triggered by a pull request, otherwise use current ref
-          ref: ${{ github.event.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref }}
 
       - name: Set up JDK
         uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12
@@ -146,22 +146,28 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Tag Docker images:
+      #  - always: tag with SHA
       #  - if PR to main: tag as branch and pr-{number}
-      #  - if merged to main: tag with version, SHA, and 'latest'
+      #  - if merged to main: tag with version, and 'latest'
       #  - if manual dispatch: add provided tags
       # Only merged images get permanent tags to keep the registry clean.
       - name: Prepare Docker metadata
         id: meta
         uses: docker/metadata-action@369eb591f429131d6889c46b94e711f089e6ca96
+        env:
+          # Use the SHA of the PR head commit, not the temporary merge commit
+          #   See: https://github.com/docker/metadata-action/issues/283
+          DOCKER_METADATA_PR_HEAD_SHA: true
         with:
           images: |
             ${{ steps.image-path.outputs.image_path }}
           tags: |
-            type=ref,event=tag
             type=ref,event=pr
-            type=semver,pattern={{ steps.app-version.outputs.app_version }},enable={{ is_default_branch }}
+            type=ref,event=tag
+            type=sha,enable=true
             type=raw,value=latest,enable={{ is_default_branch }}
             {{ needs.event-validation.outputs.tags_string }} # if workflow_dispatch, add tags
+            type=semver,pattern={{ steps.app-version.outputs.app_version }},enable={{ is_default_branch }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@ca877d9245402d1537745e0e356eab47c3520991

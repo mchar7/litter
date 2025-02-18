@@ -34,10 +34,15 @@ jobs:
   check-context:
     runs-on: ubuntu-latest
     env:
-      WF_RUN_REF: ${{ github.event.workflow_run.head_branch }} # must be used to avoid CWE-94 & CWE-349
+      # must use env var for these to avoid CWE-94 & CWE-349:
+      WF_RUN_HEAD: ${{ github.event.workflow_run.head_branch }}
+      WF_RUN_PR_BASE: ${{ github.event.workflow_run.event.pull_request.base.ref }}
     outputs:
       should_deploy: ${{ steps.should-deploy.outputs.should_deploy }}
     steps:
+      - name: Debug context
+        uses: crazy-max/ghaction-dump-context@5355a8e5e6ac5a302e746a1c4b7747a0393863c8
+
       - name: Get context of workflow trigger
         id: context-check
         run: |
@@ -60,7 +65,7 @@ jobs:
             elif [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
               echo "CI triggered by a pull request event."
 
-              if [[ "${{ github.event.workflow_run.pull_request.base.ref }}" == "main" ]]; then
+              if [[ "$WF_RUN_PR_BASE" == "main" ]]; then
                 echo "The PR is targeting the main branch."
               else
                 echo "The PR is not targeting the main branch."
@@ -197,21 +202,23 @@ jobs:
         # Determine the correct Docker image tag based on the triggering context:
         # - For workflow_run:
         #   - If the triggering event is a pull request, tag with "pr-<pr number>"
-        #   - Otherwise, for push events (merged to main) tag with the commit SHA
-        # - For manual (workflow_dispatch), default to the "latest" tag
+        #   - Otherwise, for push events (merged to main) use the short SHA tag
+        # - For manual (workflow_dispatch), default to the short SHA tag
       - name: Determine Image Tag
         id: determine-image-tag
         run: |
+          shaShort=${GITHUB_SHA::7}
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             CI_TRIGGER_EVENT="${{ github.event.workflow_run.event }}"
             if [[ "$CI_TRIGGER_EVENT" == "pull_request" ]]; then
+              # For PR events, tag as pr-<pr number>
               pr_number="${{ github.event.workflow_run.event.pull_request.number }}"
               imageTag="pr-${pr_number}"
             else
-              imageTag="${{ github.event.workflow_run.head_sha }}"
+              imageTag == "sha-$shaShort"
             fi
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            imageTag="latest"
+            imageTag="sha-$shaShort"
           else
             echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
           fi
@@ -295,7 +302,7 @@ jobs:
         id: tf-plan
         run: | # For app image tag, use the output from determine-image-tag
           terraform plan \
-            -var-file="example.tfvars" \
+            -var-file "example.tfvars" \
             -var "az_dns_zone_name=${{ env.ROOT_DOMAIN }}" \
             -var "az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var "acme_provider_url=${{ needs.prepare-deployment.outputs.acme_provider_url }}" \
