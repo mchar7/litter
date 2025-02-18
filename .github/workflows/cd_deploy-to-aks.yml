@@ -37,6 +37,8 @@ jobs:
       # must use env var for these to avoid CWE-94 & CWE-349:
       WF_RUN_HEAD: "${{ github.event.workflow_run.head_branch }}"
       WF_RUN_PR_BASE: "${{ github.event.workflow_run.pull_requests[0].base.ref }}"
+      GITHUB_CONTEXT: ${{ toJson(github) }}
+      PR_CONTEXT: ${{ toJson(github.event.workflow_run.pull_requests) }}
     outputs:
       should_deploy: ${{ steps.should-deploy.outputs.should_deploy }}
     steps:
@@ -46,6 +48,18 @@ jobs:
       - name: Get context of workflow trigger
         id: context-check
         run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+          echo "Workflow trigger context:"
+          echo "full context: '$GITHUB_CONTEXT'"
+          echo "json for pull_requests: '$PR_CONTEXT'"
+          
+          # use jq to parse the JSON context and provide certain values
+          echo "pull_requests full array: $(echo $PR_CONTEXT | jq '.event.pull_requests')"
+          echo "pull_requests first element: $(echo $PR_CONTEXT | jq '.event.pull_requests[0]')"
+          echo "pull_requests first element base ref: $(echo $PR_CONTEXT | jq '.event.pull_requests[0].base.ref')"
+          
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "Workflow triggered manually."
 
@@ -151,9 +165,9 @@ jobs:
             esac
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             if [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
-              pr_number="${{ github.event.workflow_run.event.pull_request.number }}"
-              environmentName="PR Staging: #$pr_number"
-              environmentCode="pr-${pr_number}-staging"
+              prNum="${{ github.event.workflow_run.event.pull_requests[0].number }}"
+              environmentName="PR Staging: #$prNum"
+              environmentCode="pr-${prNum}-staging"
             else
               environmentName="Production"
               environmentCode="prod"
@@ -212,10 +226,10 @@ jobs:
             CI_TRIGGER_EVENT="${{ github.event.workflow_run.event }}"
             if [[ "$CI_TRIGGER_EVENT" == "pull_request" ]]; then
               # For PR events, tag as pr-<pr number>
-              pr_number="${{ github.event.workflow_run.event.pull_request.number }}"
-              imageTag="pr-${pr_number}"
+              prNum="${{ github.event.workflow_run.event.pull_requests[0].number }}"
+              imageTag="pr-${prNum}"
             else
-              imageTag == "sha-$shaShort"
+              imageTag="sha-$shaShort"
             fi
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             imageTag="sha-$shaShort"
