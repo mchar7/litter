@@ -126,8 +126,7 @@ jobs:
       # Determine the deployment environment details (name, code, URL) based on the triggering context:
       # - For manual dispatch, use the given input for environment name and pre-defined environment codes
       # - For workflow_run:
-      #   - If the CI workflow was triggered by a pull request event, deploy to an ephemeral environment
-      #     named "PR Staging: #<pr number>" with environment code "pr-<pr number>-staging"
+      #   - If the CI workflow was triggered by a pull request event, deploy to the staging environment
       # - For push event (always to main branch):
       #   - Deploy to production environment, with environment code "prod"
       - name: Determine Environment
@@ -148,17 +147,16 @@ jobs:
             esac
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             if [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
-              prNum="${{ github.event.workflow_run.pull_requests[0].number }}"
-              environmentName="PR Staging: #$prNum"
-              environmentCode="pr-${prNum}-staging"
-            else
+              environmentName="Staging"
+              environmentCode="staging"
+            else  # push events to main branch; deploy to production
               environmentName="Production"
               environmentCode="prod"
             fi
           else
             echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
           fi
-          # set env URL based on env code (e.g. "https://pr-123-staging.litter.dev")
+          # set env URL based on env code (e.g. "https://staging.litter.dev")
           environmentURL="https://$environmentCode.$ROOT_DOMAIN"
 
           echo "environment_name=$environmentName"  >> $GITHUB_OUTPUT
@@ -232,7 +230,7 @@ jobs:
           envCode="${{ steps.determine-env.outputs.environment_code }}"
           if [[ "$envCode" == "prod" ]]; then
             overrideFile="values.prod.yaml"
-          elif [[ "$envCode" == "staging" || "$envCode" =~ ^pr-.*-staging$ ]]; then
+          elif [[ "$envCode" == "staging" ]]; then
             overrideFile="values.staging.yaml"
           else
             overrideFile="values.dev.yaml"

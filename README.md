@@ -90,7 +90,7 @@ litter-test
 
 ## :cloud: Infrastructure
 
-![Azure infrastructure as Mermaid diagram](res/img/litter_architecture_diagram.svg)
+![Azure infrastructure as Mermaid diagram](res/img/litter_architecture_diagram.png)
 
 > [!TIP]
 > The infrastructure is defined entirely in code:
