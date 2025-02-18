@@ -1,4 +1,4 @@
-# This workflow automatically cleans up ephemeral PR staging environment when a PR
+# This workflow automatically cleans up staging PR environment when a PR
 #   targeting the main branch is closed to avoid unnecessary Azure costs.
 name: PR Cleanup
 on:
@@ -8,7 +8,7 @@ on:
 jobs:
   cleanup:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.base.ref == 'main' # only run on PRs to main
+    if: ${{ github.event.pull_request.base.ref == 'main' }} # only run on PRs to main
     env:
       # Azure credentials (cannot use azure/login action with service principal)
       #   See: https://github.com/hashicorp/terraform-provider-azurerm/issues/22034
@@ -24,7 +24,7 @@ jobs:
       - name: Git checkout for Terraform files
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
@@ -41,7 +41,7 @@ jobs:
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         env:
           STATE_KEY_PREFIX: "env-" # Prefix for the state key
-          WORKSPACE_CODE: ${{ steps.determine_env_code.outputs.env_code }}
+          WORKSPACE_CODE: "staging"
         run: |
           # Construct the new key by prepending the prefix to the workspace code
           stateKey="${STATE_KEY_PREFIX}${WORKSPACE_CODE}.tfstate"
@@ -57,7 +57,7 @@ jobs:
       - name: Terraform destroy
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         run: |
-          echo "Cleaning up ephemeral environment for PR #${{ github.event.pull_request.number }}"
+          echo "Cleaning up staging environment for PR #${{ github.event.pull_request.number }}"
           terraform destroy -auto-approve \
             -var-file=example.tfvars \
             -var="az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
