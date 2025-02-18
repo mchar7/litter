@@ -20,6 +20,7 @@ on:
 jobs:
   event-validation:
     runs-on: ubuntu-latest
+    permissions: { }
     outputs:
       image_tags: ${{ steps.validate-tags.outputs.tags_string }}
     steps:

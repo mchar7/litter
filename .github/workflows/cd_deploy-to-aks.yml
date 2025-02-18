@@ -33,6 +33,8 @@ on:
 jobs:
   check-context:
     runs-on: ubuntu-latest
+    env:
+      WF_RUN_REF: ${{ github.event.workflow_run.ref }} # must be used to avoid CWE-94 & CWE-349
     outputs:
       should_deploy: ${{ steps.should-deploy.outputs.should_deploy }}
     steps:
@@ -48,10 +50,10 @@ jobs:
             if [[ "${{ github.event.workflow_run.event }}" == "push" ]]; then
               echo "CI triggered by a push event."
 
-              if [[ "${{ github.event.workflow_run.ref == 'refs/heads/main' }}" == "main" ]]; then
+              if [[ "$WF_RUN_REF" == "refs/heads/main" ]]; then
                 echo "Commit was pushed to main branch."
               else
-                echo "Commit was pushed to '${{ github.event.workflow_run.ref }}', not the main branch."
+                echo "Commit was pushed to ${WF_RUN_REF}, not the main branch."
                 echo "deploymentRoadblock=true" >> $GITHUB_ENV
               fi
 

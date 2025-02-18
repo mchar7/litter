@@ -8,8 +8,6 @@ on:
 jobs:
   cleanup:
     runs-on: ubuntu-latest
-    # Only run cleanup for PRs that are closed without merge or after merge (cleanup applies in both cases)
-    if: ${{ github.event.pull_request.state == 'closed' }}
     env:
       # Azure credentials (cannot use azure/login action with service principal)
       #   See: https://github.com/hashicorp/terraform-provider-azurerm/issues/22034
@@ -68,6 +66,6 @@ jobs:
         run: |
           echo "Cleaning up ephemeral environment for PR #${{ github.event.pull_request.number }}"
           terraform destroy -auto-approve \
-            -var_file="example.tfvars" \
+            -var_file "example.tfvars" \
             -var "az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var "app_environment=${{ steps.determine_env_code.outputs.env_code }}"
