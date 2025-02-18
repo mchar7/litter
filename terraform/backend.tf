@@ -9,6 +9,6 @@ terraform {
     resource_group_name  = "litter-state-rg"
     storage_account_name = "litterstatestorage"
     container_name       = "tfstate"
-    key                  = "default.tfstate" # this is the default key
+    key                  = "env-dev.tfstate" # this is the default key
   }
 }

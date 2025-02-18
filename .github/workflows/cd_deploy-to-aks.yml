@@ -3,6 +3,8 @@
 #   or it can be triggered manually via workflow_dispatch.
 name: CD - Deploy to AKS
 permissions: { } # default to minimal permission, overriding in jobs only as needed
+env:
+  ROOT_DOMAIN: "litter.dev"
 on:
   # Trigger deployment after successful CI run (for both merged commits and PR builds)
   workflow_run:
@@ -37,30 +39,38 @@ jobs:
       - name: Get context of workflow trigger
         id: context-check
         run: |
-          if [[ "${{ github.event.workflow_run.event }}" == "workflow_dispatch" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "Workflow triggered manually."
 
-          elif [[ "${{ github.event.workflow_run.event }}" == "push" ]]; then
-            echo "CD triggered by CI workflow's completion. CI triggered by a push event."
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "Workflow triggered by CI workflow's completion."
 
-            if [[ "${{ github.event.workflow_run.head.ref }}" == "main" ]]; then
-              echo "Commit was pushed to main branch."
+            if [[ "${{ github.event.workflow_run.event }}" == "push" ]]; then
+              echo "CI triggered by a push event."
+
+              if [[ "${{ github.event.workflow_run.ref == 'refs/heads/main' }}" == "main" ]]; then
+                echo "Commit was pushed to main branch."
+              else
+                echo "Commit was pushed to '${{ github.event.workflow_run.ref }}', not the main branch."
+                echo "deploymentRoadblock=true" >> $GITHUB_ENV
+              fi
+
+            elif [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
+              echo "CI triggered by a pull request event."
+
+              if [[ "${{ github.event.workflow_run.pull_request.base.ref }}" == "main" ]]; then
+                echo "The PR is targeting the main branch."
+              else
+                echo "The PR is not targeting the main branch."
+                echo "deploymentRoadblock=true" >> $GITHUB_ENV
+              fi
+
             else
-              echo "Commit was not pushed to main."
-              echo "deploymentRoadblock=true" >> $GITHUB_ENV
-            fi
-
-          elif [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
-            echo "CD triggered by CI workflow's completion. CI triggered by a pull request event."
-
-            if [[ "${{ github.event.workflow_run.pull_request.base.ref }}" == "main" ]]; then
-              echo "The PR is targeting the main branch."
-            else
-              echo "The PR is not targeting the main branch."
+              echo "Error: CI triggered by unsupported event '${{ github.event.workflow_run.event }}'."
               echo "deploymentRoadblock=true" >> $GITHUB_ENV
             fi
           else
-            echo "Error: Unsupported event '${{ github.event.workflow_run.event }}'."
+            echo "Error: Unsupported event '${{ github.event_name }}'."
             echo "deploymentRoadblock=true" >> $GITHUB_ENV
           fi
 
@@ -68,10 +78,10 @@ jobs:
         if: ${{ github.event_name == 'workflow_run' }}
         run: |
           if [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
-              echo "CI was successful."
+            echo "CI was successful."
           else
-              echo "CI failed."
-              echo "deploymentRoadblock=true" >> $GITHUB_ENV
+            echo "CI failed."
+            echo "deploymentRoadblock=true" >> $GITHUB_ENV
           fi
 
       - name: Should deploy?
@@ -90,8 +100,6 @@ jobs:
     needs: [ check-context ]
     runs-on: ubuntu-latest
     if: ${{ needs.check-context.outputs.should_deploy == 'true' }}
-    env:
-      ROOT_DOMAIN: "litter.dev"
     outputs:
       image_path: ${{ steps.image-path.outputs.image_path }}
       image_tag: ${{ steps.determine-image-tag.outputs.image_tag }}
@@ -99,7 +107,7 @@ jobs:
       environment_code: ${{ steps.determine-env.outputs.environment_code }}
       environment_url: ${{ steps.determine-env.outputs.environment_url }}
       acme_provider_url: ${{ steps.determine-acme-url.outputs.acme_provider_url }}
-      app_helm_overrides_path: ${{ steps.select-helm-overrides.outputs.app_helm_overrides_path }}
+      app_helm_overrides_filename: ${{ steps.select-helm-overrides.outputs.app_helm_overrides_filename }}
     steps:
       # Image repo must be lowercase and GitHub Actions doesn't have easy string manipulation.
       #   Was causing issues when username had an uppercase letter
@@ -135,8 +143,7 @@ jobs:
                 ;;
             esac
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            CI_TRIGGER_EVENT="${{ github.event.workflow_run.event }}"
-            if [[ "$CI_TRIGGER_EVENT" == "pull_request" ]]; then
+            if [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
               pr_number="${{ github.event.workflow_run.event.pull_request.number }}"
               environmentName="PR Staging: #$pr_number"
               environmentCode="pr-${pr_number}-staging"
@@ -147,6 +154,7 @@ jobs:
           else
             echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
           fi
+          # set env URL based on env code (e.g. "https://pr-123-staging.litter.dev")
           environmentURL="https://$environmentCode.$ROOT_DOMAIN"
 
           echo "environment_name=$environmentName"  >> $GITHUB_OUTPUT
@@ -198,11 +206,9 @@ jobs:
               pr_number="${{ github.event.workflow_run.event.pull_request.number }}"
               imageTag="pr-${pr_number}"
             else
-              # For push events (merged to main) use the commit SHA
               imageTag="${{ github.event.workflow_run.head_sha }}"
             fi
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # For manual dispatch, default to "latest"
             imageTag="latest"
           else
             echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
@@ -217,16 +223,16 @@ jobs:
       - name: Select Helm Overrides File
         id: select-helm-overrides
         run: |
-          ENV_CODE="${{ steps.determine-env.outputs.environment_code }}"
-          if [[ "$ENV_CODE" == "prod" ]]; then
-            OVERRIDES="./chart/values.prod.yaml"
-          elif [[ "$ENV_CODE" == "staging" || "$ENV_CODE" =~ ^pr-.*-staging$ ]]; then
-            OVERRIDES="./chart/values.staging.yaml"
+          envCode="${{ steps.determine-env.outputs.environment_code }}"
+          if [[ "$envCode" == "prod" ]]; then
+            overrideFile="values.prod.yaml"
+          elif [[ "$envCode" == "staging" || "$envCode" =~ ^pr-.*-staging$ ]]; then
+            overrideFile="values.staging.yaml"
           else
-            OVERRIDES="./chart/values.dev.yaml"
+            overrideFile="values.dev.yaml"
           fi
-          echo "app_helm_overrides_path=$OVERRIDES" >> $GITHUB_OUTPUT
-          echo "Selected override file: $OVERRIDES"
+          echo "app_helm_overrides_filename=$overrideFile" >> $GITHUB_OUTPUT
+          echo "Selected override file: $overrideFile"
 
   deploy-to-aks:
     needs: [ prepare-deployment, check-context ]
@@ -264,23 +270,19 @@ jobs:
       - name: Update Terraform backend key dynamically
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         env:
-          BACKEND_FILENAME: "backend.tf" # within the working directory
           STATE_KEY_PREFIX: "env-" # Prefix for the state key
           WORKSPACE_CODE: ${{ needs.prepare-deployment.outputs.environment_code }}
         run: |
           # Construct the new key by prepending the prefix to the workspace code
-          NEW_KEY="${STATE_KEY_PREFIX}${WORKSPACE_CODE}.tfstate"
-          echo "Updating Terraform backend key to ${NEW_KEY}"
-          # Use extended regular expressions to update the key, regardless of whitespace differences
-          sed -E -i "s/^[[:space:]]*key[[:space:]]*=[[:space:]]*\"[^\"]*\"/  key = \"${NEW_KEY}\"/" $BACKEND_FILENAME
+          stateKey="${STATE_KEY_PREFIX}${WORKSPACE_CODE}.tfstate"
+          echo "Updating Terraform backend key to ${stateKey}"
+
+          # Use regex to update the key, regardless of whitespace differences
+          sed -E -i "s/^[[:space:]]*key[[:space:]]*=[[:space:]]*\"[^\"]*\"/  key = \"${stateKey}\"/" backend.tf
 
       - name: Terraform init
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         run: terraform init
-
-      - name: Select Terraform workspace
-        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-        run: terraform workspace select -or-create ${{ needs.prepare-deployment.outputs.environment_code }}
 
       - name: Terraform validate
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
@@ -292,14 +294,13 @@ jobs:
         run: | # For app image tag, use the output from determine-image-tag
           terraform plan \
             -var-file="example.tfvars" \
-            -var "az_dns_rg=${{ vars.AZ_DNS_RG }}" \
-            -var "az_dns_zone_name=${{ vars.AZ_DNS_ZONE_NAME }}" \
+            -var "az_dns_zone_name=${{ env.ROOT_DOMAIN }}" \
             -var "az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var "acme_provider_url=${{ needs.prepare-deployment.outputs.acme_provider_url }}" \
+            -var "app_helm_overrides_filename=${{ needs.prepare-deployment.outputs.app_helm_overrides_filename }}" \
             -var "app_environment=${{ needs.prepare-deployment.outputs.environment_code }}" \
             -var "app_image_repo_url=${{ needs.prepare-deployment.outputs.image_path }}" \
             -var "app_image_tag=${{ needs.prepare-deployment.outputs.image_tag }}" \
-            -var "app_helm_overrides_path=${{ needs.prepare-deployment.outputs.app_helm_overrides_path }}" \
             -out=tfplan
 
       - name: Terraform apply
@@ -312,7 +313,7 @@ jobs:
     permissions:
       contents: read
       statuses: write
-    if: ${{ always() && github.event.workflow_run.event == 'pull_request' }} # Only report status for PRs (run job even if prev jobs fail)
+    if: ${{ always() && github.event.workflow_run.event == 'pull_request' }} # Report status for PRs only (even if prev jobs fail)
     steps:
       - name: Update PR status
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
