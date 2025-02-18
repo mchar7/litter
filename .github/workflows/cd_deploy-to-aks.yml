@@ -60,7 +60,7 @@ jobs:
             elif [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
               echo "CI triggered by a pull request event."
 
-              if [[ "${{ github.event.workflow_run.pull_request.base.ref }}" == "main" ]]; then
+              if [[ "$WF_RUN_REF" == "main" ]]; then
                 echo "The PR is targeting the main branch."
               else
                 echo "The PR is not targeting the main branch."
@@ -205,6 +205,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             CI_TRIGGER_EVENT="${{ github.event.workflow_run.event }}"
             if [[ "$CI_TRIGGER_EVENT" == "pull_request" ]]; then
+              # For PR events, tag as pr-<pr number>
               pr_number="${{ github.event.workflow_run.event.pull_request.number }}"
               imageTag="pr-${pr_number}"
             else
@@ -295,7 +296,7 @@ jobs:
         id: tf-plan
         run: | # For app image tag, use the output from determine-image-tag
           terraform plan \
-            -var-file="example.tfvars" \
+            -var-file "example.tfvars" \
             -var "az_dns_zone_name=${{ env.ROOT_DOMAIN }}" \
             -var "az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var "acme_provider_url=${{ needs.prepare-deployment.outputs.acme_provider_url }}" \

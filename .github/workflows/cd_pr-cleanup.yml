@@ -66,6 +66,6 @@ jobs:
         run: |
           echo "Cleaning up ephemeral environment for PR #${{ github.event.pull_request.number }}"
           terraform destroy -auto-approve \
-            -var_file=example.tfvars \
+            -var-file=example.tfvars \
             -var="az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var="app_environment=${{ steps.determine_env_code.outputs.env_code }}"
