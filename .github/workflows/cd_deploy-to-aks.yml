@@ -34,10 +34,15 @@ jobs:
   check-context:
     runs-on: ubuntu-latest
     env:
-      WF_RUN_REF: ${{ github.event.workflow_run.head_branch }} # must be used to avoid CWE-94 & CWE-349
+      # must use env var for these to avoid CWE-94 & CWE-349:
+      WF_RUN_HEAD: ${{ github.event.workflow_run.head_branch }}
+      WF_RUN_PR_BASE: ${{ github.event.workflow_run.event.pull_request.base.ref }}
     outputs:
       should_deploy: ${{ steps.should-deploy.outputs.should_deploy }}
     steps:
+      - name: Debug context
+        uses: crazy-max/ghaction-dump-context@5355a8e5e6ac5a302e746a1c4b7747a0393863c8
+
       - name: Get context of workflow trigger
         id: context-check
         run: |
@@ -60,7 +65,7 @@ jobs:
             elif [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
               echo "CI triggered by a pull request event."
 
-              if [[ "$WF_RUN_REF" == "main" ]]; then
+              if [[ "$WF_RUN_PR_BASE" == "main" ]]; then
                 echo "The PR is targeting the main branch."
               else
                 echo "The PR is not targeting the main branch."
