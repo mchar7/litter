@@ -49,26 +49,25 @@ jobs:
       - name: Update Terraform backend key dynamically
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         env:
-          BACKEND_FILENAME: "backend.tf" # within the working directory
           STATE_KEY_PREFIX: "env-" # Prefix for the state key
           WORKSPACE_CODE: ${{ steps.determine_env_code.outputs.env_code }}
         run: |
           # Construct the new key by prepending the prefix to the workspace code
-          NEW_KEY="${STATE_KEY_PREFIX}${WORKSPACE_CODE}.tfstate"
-          echo "Updating Terraform backend key to ${NEW_KEY}"
-          # Use extended regular expressions to update the key, regardless of whitespace differences
-          sed -E -i "s/^[[:space:]]*key[[:space:]]*=[[:space:]]*\"[^\"]*\"/  key = \"${NEW_KEY}\"/" $BACKEND_FILENAME
+          stateKey="${STATE_KEY_PREFIX}${WORKSPACE_CODE}.tfstate"
+          echo "Updating Terraform backend key to ${stateKey}"
+
+          # Use regex to update the key, regardless of whitespace differences
+          sed -E -i "s/^[[:space:]]*key[[:space:]]*=[[:space:]]*\"[^\"]*\"/  key = \"${stateKey}\"/" backend.tf
 
       - name: Terraform init
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         run: terraform init
 
-      - name: Select Terraform workspace
-        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-        run: terraform workspace select -or-create ${{ steps.determine_env_code.outputs.env_code }}
-
       - name: Terraform destroy
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         run: |
           echo "Cleaning up ephemeral environment for PR #${{ github.event.pull_request.number }}"
-          terraform destroy -auto-approve -var "app_environment=${{ steps.determine_env_code.outputs.env_code }}"
+          terraform destroy -auto-approve \
+            -var_file="example.tfvars" \
+            -var "az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            -var "app_environment=${{ steps.determine_env_code.outputs.env_code }}"

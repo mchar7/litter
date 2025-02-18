@@ -6,22 +6,10 @@ variable "az_subscription_id" {
   description = "Azure subscription ID"
 }
 
-variable "k8s_rg_name" {
-  type        = string
-  description = "Name of the resource group"
-  default     = "litter-k8s-rg"
-}
-
 variable "k8s_location" {
   type        = string
   description = "Azure region for the AKS cluster"
   default     = "eastus"
-}
-
-variable "k8s_cluster_name" {
-  type        = string
-  description = "AKS cluster name"
-  default     = "litter-k8s-cluster"
 }
 
 variable "k8s_node_count" {
@@ -77,6 +65,7 @@ variable "app_environment" {
 variable "app_image_repo_url" {
   type        = string
   description = "Image repository for the Litter app"
+  default     = "ghcr.io/mchar7/litter"
 }
 
 variable "app_image_tag" {
@@ -85,9 +74,9 @@ variable "app_image_tag" {
   default     = "latest"
 }
 
-variable "app_helm_overrides_path" {
+variable "app_helm_overrides_filename" {
   type        = string
-  description = "Path to the Helm override file (use to override 'values.common.yaml', relative to the project root)"
+  description = "Filename to the Helm override file (use to override 'values.common.yaml', relative 'chart' directory)"
   default     = null
   nullable    = true
 }

@@ -2,15 +2,17 @@
 # MAIN INFRASTRUCTURE
 ############################################################
 resource "azurerm_resource_group" "litter_k8s_rg" {
-  name     = var.k8s_rg_name
+  # named like: aks-litter-dev-eastus-rg-001
+  # see: https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming
+  name     = "aks-${var.app_name}-${var.app_environment}-${var.k8s_location}-rg-001"
   location = var.k8s_location
 }
 
 resource "azurerm_kubernetes_cluster" "aks" {
-  name                      = var.k8s_cluster_name
+  name                      = "aks-cluster-${var.app_name}-${var.app_environment}"
+  dns_prefix                = "${var.app_name}-${var.app_environment}"
   location                  = azurerm_resource_group.litter_k8s_rg.location
   resource_group_name       = azurerm_resource_group.litter_k8s_rg.name
-  dns_prefix                = var.k8s_cluster_name
   # OIDC and workload identity are enabled to allow cert-manager to authenticate with Azure DNS
   #   see: https://cert-manager.io/docs/configuration/acme/dns01/azuredns/#managed-identity-using-aad-pod-identity
   oidc_issuer_enabled       = true
@@ -251,6 +253,7 @@ module "cert_manager" {
     }
   }
   depends_on = [
+    kubernetes_namespace.env,
     helm_release.nginx_ingress,
     azurerm_federated_identity_credential.cert_manager_federated
   ]
@@ -312,8 +315,8 @@ resource "helm_release" "litter" {
   # pass the values files to the Helm chart (files placed lower override those above them)
   values = [
     file("${path.root}/../chart/values.common.yaml"), # common (shared) values file
-    # if app_helm_overrides_path is set/not null, use the provided file:
-      var.app_helm_overrides_path != null ? file(var.app_helm_overrides_path) : "",
+    # if app_helm_overrides_filename is set/not null, use the provided file:
+      var.app_helm_overrides_filename != null ? file("${path.root}/../chart/${var.app_helm_overrides_filename}") : "",
   ]
   set {
     name  = "app.image.repository"

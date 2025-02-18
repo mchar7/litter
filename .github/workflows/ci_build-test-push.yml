@@ -7,9 +7,48 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch: { }
-
+  workflow_dispatch:
+    inputs:
+      push_to_registry:
+        description: 'Push image to container registry?'
+        type: boolean
+        default: false
+      image_tags:
+        description: 'Image tags (comma-separated; only use if pushing image)'
+        type: string
+        required: false
 jobs:
+  event-validation:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tags: ${{ steps.validate-tags.outputs.tags_string }}
+    steps:
+      - name: Validate tags (workflow_dispatch only)
+        id: validate-tags
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          if [[ "${{ github.event.inputs.push_to_registry }}" == "true" ]]; then
+            if [[ -z "${{ github.event.inputs.image_tags }}" ]]; then
+              echo "Error: Image tags must be given when pushing to the registry"; exit 1
+            else
+              # Try conversion to array and check for valid tags
+              #   Tag validation (for each element): alphanumeric or hyphen (not at start or end)
+              IFS=',' read -ra tags <<< "${{ github.event.inputs.image_tags }}"
+              for tag in "${tags[@]}"; do
+                if [[ ! "$tag" =~ ^[a-zA-Z0-9]+[a-zA-Z0-9-]*[a-zA-Z0-9]+$ ]]; then
+                  echo "Error: Invalid image tag '$tag'"; exit 1
+                fi
+              done
+          
+              # Convert array to a single string for use in docker/metadata-action step later
+              # Each tag should be prefixed with 'type=raw,enabled=true,value=' (newline separated, no trailing newline)
+              tagsStr=$(printf "type=raw,value=%s,enabled=true" "${tags[@]}" | tr ' ' '\n')
+              echo "tags_string=$tagsStr" >> $GITHUB_OUTPUT
+              echo "Image tags: ${tags[@]}"
+              echo "Docker metadata tags string: $docker_metadata_tags_string"
+            fi
+          fi
+
   build-and-test:
     runs-on: ubuntu-latest
     permissions:
@@ -37,8 +76,12 @@ jobs:
       - name: Debug the event
         run: |
           echo "Event name: ${{ github.event_name }}"
-          echo "Base ref: ${{ github.base_ref }}"
-          echo "Head ref: ${{ github.head_ref }}"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "Base ref: ${{ github.base_ref }}"
+            echo "Head ref: ${{ github.head_ref }}"
+          else
+            echo "Ref: ${{ github.ref }}"
+          fi
 
       # Upload JAR artifact for main branch builds and PR builds targeting main
       - name: Upload JAR artifact
@@ -50,10 +93,13 @@ jobs:
           if-no-files-found: error
 
   push-image:
-    needs: build-and-test
+    needs: [ event-validation, build-and-test ]
     runs-on: ubuntu-latest
-    # Run for main branch or PRs targeting main
-    if: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main') }}
+    # Only push the images to the container registry if:
+    #  - (event: workflow_dispatch) push_to_registry was set to true
+    #  - (event: push) the branch is main
+    #  - (event: pull_request) the base branch is main
+    if: ${{ github.event.inputs.push_to_registry || (github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')) }}
     permissions:
       contents: read
       packages: write
@@ -99,8 +145,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Tag Docker images:
-      #  - PR to main: tag as branch and pr-{number}
-      #  - Merged to main: tag with version, SHA, and 'latest'
+      #  - if PR to main: tag as branch and pr-{number}
+      #  - if merged to main: tag with version, SHA, and 'latest'
+      #  - if manual dispatch: add provided tags
       # Only merged images get permanent tags to keep the registry clean.
       - name: Prepare Docker metadata
         id: meta
@@ -113,7 +160,7 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{ steps.app-version.outputs.app_version }},enable={{ is_default_branch }}
             type=raw,value=latest,enable={{ is_default_branch }}
-
+            {{ needs.event-validation.outputs.tags_string }} # if workflow_dispatch, add tags
 
       - name: Build and push Docker image
         uses: docker/build-push-action@ca877d9245402d1537745e0e356eab47c3520991
@@ -121,5 +168,5 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }},
           labels: ${{ steps.meta.outputs.labels }}
