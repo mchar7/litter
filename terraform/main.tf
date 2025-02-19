@@ -1,6 +1,11 @@
 ############################################################
 # MAIN INFRASTRUCTURE
 ############################################################
+data "azurerm_key_vault" "litter_kv" {
+  name                = var.kv_name
+  resource_group_name = var.kv_rg
+}
+
 resource "azurerm_resource_group" "litter_k8s_rg" {
   # named like: aks-litter-dev-eastus-rg-001
   # see: https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming
@@ -34,6 +39,9 @@ resource "azurerm_kubernetes_cluster" "aks" {
   network_profile {
     network_plugin    = "azure"
     load_balancer_sku = var.k8s_lb_az_sku
+  }
+  key_vault_secrets_provider {
+    secret_rotation_enabled = true
   }
 }
 
@@ -95,18 +103,68 @@ resource "kubernetes_namespace" "env" {
   ]
 }
 
-# create a secret to store the app secrets (mongo DB credentials, jwt-secret, etc.)
-resource "kubernetes_secret" "app_secret_values" {
-  type = "Opaque"
-  metadata {
-    name      = "${var.app_name}-secrets"
-    namespace = "${var.app_name}-${var.app_environment}"
-  }
-  data = {
-    "mongo-app-username" = data.azurerm_key_vault_secret.kv_db_user_username.value
-    "mongo-app-password" = data.azurerm_key_vault_secret.kv_db_user_password.value
-    "jwt-secret"         = data.azurerm_key_vault_secret.kv_jwt_secret.value
-  }
+# resource "kubernetes_manifest" "az_kv_k8s_provider" {
+#   manifest = {
+#     "apiVersion" = "secrets-store.csi.x-k8s.io/v1"
+#     "kind"       = "SecretProviderClass"
+#     "metadata" = {
+#       "name"      = "${var.app_name}-kv-provider"
+#       "namespace" = "${var.app_name}-${var.app_environment}"
+#     }
+#     "spec" = {
+#       "provider" = "azure"
+#       "parameters" = {
+#         "usePodIdentity" = "false"
+#         "useVMManagedIdentity" = "true"
+#         # "userAssignedIdentityID" = azurerm_user_assigned_identity
+#         "keyvaultName"   = var.kv_name
+#         tenantId = data.azurerm_key_vault.litter_kv.tenant_id # if not needed, can remove this and kv data source
+#         "objects"        = <<EOF
+#           array:
+#             - |
+#               objectName: db-user-username
+#               objectType: secret
+#             - |
+#               objectName: db-user-password
+#               objectType: secret
+#             - |
+#               objectName: jwt-secret
+#               objectType: secret
+#           EOF
+#       }
+#     }
+#   }
+#   depends_on = [kubernetes_namespace.env]
+# }
+
+resource "kubectl_manifest" "az_kv_k8s_provider" {
+  # Using kubectl as a workaround for kubernetes_manifest requiring an active cluster/k8s API
+  # see: https://github.com/hashicorp/terraform-provider-kubernetes/issues/1775
+  yaml_body = <<EOF
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: "${var.app_name}-kv-provider"
+  namespace: "${var.app_name}-${var.app_environment}"
+spec:
+  provider: azure
+  parameters:
+    usePodIdentity: "false"
+    useVMManagedIdentity: "true"
+    keyvaultName: "${var.kv_name}"
+    tenantId: "${data.azurerm_key_vault.litter_kv.tenant_id}"
+    objects: |-
+      array:
+        - |
+          objectName: db-user-username
+          objectType: secret
+        - |
+          objectName: db-user-password
+          objectType: secret
+        - |
+          objectName: jwt-secret
+          objectType: secret
+EOF
   depends_on = [kubernetes_namespace.env]
 }
 
@@ -330,12 +388,17 @@ resource "helm_release" "litter" {
     name  = "app.env.MONGO_DB"
     value = var.mongo_db_name
   }
+  set {
+    name  = "app.useSecretsStoreCSI"
+    value = true
+  }
 
   depends_on = [
     helm_release.nginx_ingress,
     kubernetes_service_account.db_sa,
     kubernetes_service_account.app_sa,
     kubernetes_persistent_volume_claim.mongo_db_pvc,
+    kubectl_manifest.az_kv_k8s_provider
   ]
 }
 
@@ -376,26 +439,12 @@ resource "kubernetes_job" "mongo_restore_job" {
           name  = "mongo-restore"
           image = "mongo:${var.mongo_version_tag}"
           command = ["/bin/sh", "-c"]
-          env {
-            name = "MONGO_APP_USERNAME"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.app_secret_values.metadata[0].name
-                key  = "mongo-app-username"
-              }
-            }
-          }
-          env {
-            name = "MONGO_APP_PASSWORD"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.app_secret_values.metadata[0].name
-                key  = "mongo-app-password"
-              }
-            }
-          }
           args = [
             <<-EOF
+              # set secrets from the CSI-mounted volume (files created by the Azure Key Vault provider)
+              export MONGO_APP_USERNAME=$(cat /mnt/secrets/db-user-username)
+              export MONGO_APP_PASSWORD=$(cat /mnt/secrets/db-user-password)
+
               # wait for MongoDB to be ready
               while ! mongosh --host ${var.app_name}-db --eval "db.adminCommand('ping')" >/dev/null 2>&1; do
                 echo "Waiting for MongoDB to be ready..."
@@ -434,6 +483,12 @@ resource "kubernetes_job" "mongo_restore_job" {
             name       = "mongo-sample-collections"
             mount_path = "/workspace"
           }
+          # mount the CSI volume for Key Vault secrets
+          volume_mount {
+            name       = "azure-keyvault-secrets"
+            mount_path = "/mnt/secrets"
+            read_only  = true
+          }
           resources {
             requests = {
               cpu    = "100m"
@@ -452,8 +507,23 @@ resource "kubernetes_job" "mongo_restore_job" {
             name = kubernetes_config_map.mongo_sample_collections_cm.metadata[0].name
           }
         }
+        # CSI volume to mount Azure Key Vault secrets (provided by the SecretProviderClass)
+        volume {
+          name = "azure-keyvault-secrets"
+          csi {
+            driver    = "secrets-store.csi.k8s.io"
+            read_only = true
+            volume_attributes = {
+              secretProviderClass = "azure-keyvault-secrets"
+            }
+          }
+        }
       }
     }
   }
-  depends_on = [helm_release.litter, kubernetes_config_map.mongo_sample_collections_cm]
+  depends_on = [
+    helm_release.litter,
+    kubernetes_config_map.mongo_sample_collections_cm,
+    kubectl_manifest.az_kv_k8s_provider
+  ]
 }

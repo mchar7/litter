@@ -213,7 +213,7 @@ jobs:
               imageTag="sha-$shaShort"
             fi
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            imageTag="sha-$shaShort"
+            imageTag="latest"
           else
             echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
           fi
