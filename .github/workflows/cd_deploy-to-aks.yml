@@ -107,9 +107,9 @@ jobs:
     outputs:
       image_path: ${{ steps.image-path.outputs.image_path }}
       image_tag: ${{ steps.determine-image-tag.outputs.image_tag }}
-      environment_name: ${{ steps.determine-env.outputs.environment_name }}
-      environment_code: ${{ steps.determine-env.outputs.environment_code }}
-      environment_url: ${{ steps.determine-env.outputs.environment_url }}
+      env_name: ${{ steps.determine-env.outputs.env_name }}
+      env_code: ${{ steps.determine-env.outputs.env_code }}
+      env_url: ${{ steps.determine-env.outputs.env_url }}
       acme_provider_url: ${{ steps.determine-acme-url.outputs.acme_provider_url }}
       app_helm_overrides_filename: ${{ steps.select-helm-overrides.outputs.app_helm_overrides_filename }}
     steps:
@@ -133,36 +133,36 @@ jobs:
         id: determine-env
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            environmentName="${{ github.event.inputs.environment }}"
-            case "$environmentName" in
+            envName="${{ github.event.inputs.environment }}"
+            case "$envName" in
               "Production")
-                environmentCode="prod"
+                envCode="prod"
                 ;;
               "Staging")
-                environmentCode="staging"
+                envCode="staging"
                 ;;
               "Development")
-                environmentCode="dev"
+                envCode="dev"
                 ;;
             esac
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             if [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
-              environmentName="Staging"
-              environmentCode="staging"
+              envName="Staging"
+              envCode="staging"
             else  # push events to main branch; deploy to production
-              environmentName="Production"
-              environmentCode="prod"
+              envName="Production"
+              envCode="prod"
             fi
           else
             echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
           fi
           # set env URL based on env code (e.g. "https://staging.litter.dev")
-          environmentURL="https://$environmentCode.$ROOT_DOMAIN"
+          envURL="https://$envCode.$ROOT_DOMAIN"
 
-          echo "environment_name=$environmentName"  >> $GITHUB_OUTPUT
-          echo "environment_code=$environmentCode"  >> $GITHUB_OUTPUT
-          echo "environment_url=$environmentURL"    >> $GITHUB_OUTPUT
-          echo "Environment: '$environmentName' (code: '$environmentCode', URL: '$environmentURL')"
+          echo "env_name=$envName"  >> $GITHUB_OUTPUT
+          echo "env_code=$envCode"  >> $GITHUB_OUTPUT
+          echo "env_url=$envURL"    >> $GITHUB_OUTPUT
+          echo "Environment: '$envName' (code: '$envCode', URL: '$envURL')"
 
       # Determine the correct ACME Server URL based on the triggering context:
       # - For workflow_dispatch:
@@ -183,7 +183,7 @@ jobs:
               echo "Error: Unsupported ACME provider '${{ github.event.inputs.acme_provider_name }}'."; exit 1
             fi
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            if [[ ${{ steps.determine-env.outputs.environment_code }} == "prod" ]]; then
+            if [[ ${{ steps.determine-env.outputs.env_code }} == "prod" ]]; then
               acmeProviderURL="https://acme-v02.api.letsencrypt.org/directory"
             else
               acmeProviderURL="https://acme-staging-v02.api.letsencrypt.org/directory"
@@ -227,7 +227,7 @@ jobs:
       - name: Select Helm Overrides File
         id: select-helm-overrides
         run: |
-          envCode="${{ steps.determine-env.outputs.environment_code }}"
+          envCode="${{ steps.determine-env.outputs.env_code }}"
           if [[ "$envCode" == "prod" ]]; then
             overrideFile="values.prod.yaml"
           elif [[ "$envCode" == "staging" ]]; then
@@ -251,8 +251,8 @@ jobs:
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TERRAFORM_WORKING_DIR: "./terraform"
     environment:
-      name: ${{ needs.prepare-deployment.outputs.environment_name }}
-      url: ${{ needs.prepare-deployment.outputs.environment_url }}
+      name: ${{ needs.prepare-deployment.outputs.env_name }}
+      url: ${{ needs.prepare-deployment.outputs.env_url }}
     permissions:
       contents: read
     timeout-minutes: 25 # This can take a WHILE, especially on first deployment & with cheap node SKUs
@@ -275,7 +275,7 @@ jobs:
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         env:
           STATE_KEY_PREFIX: "env-" # Prefix for the state key
-          WORKSPACE_CODE: ${{ needs.prepare-deployment.outputs.environment_code }}
+          WORKSPACE_CODE: ${{ needs.prepare-deployment.outputs.env_code }}
         run: |
           # Construct the new key by prepending the prefix to the workspace code
           stateKey="${STATE_KEY_PREFIX}${WORKSPACE_CODE}.tfstate"
@@ -302,7 +302,7 @@ jobs:
             -var "az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var "acme_provider_url=${{ needs.prepare-deployment.outputs.acme_provider_url }}" \
             -var "app_helm_overrides_filename=${{ needs.prepare-deployment.outputs.app_helm_overrides_filename }}" \
-            -var "app_environment=${{ needs.prepare-deployment.outputs.environment_code }}" \
+            -var "app_environment=${{ needs.prepare-deployment.outputs.env_code }}" \
             -var "app_image_repo_url=${{ needs.prepare-deployment.outputs.image_path }}" \
             -var "app_image_tag=${{ needs.prepare-deployment.outputs.image_tag }}" \
             -out=tfplan
