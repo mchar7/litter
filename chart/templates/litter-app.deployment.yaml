@@ -41,25 +41,19 @@ spec:
                 {{ toYaml $val | nindent 14 }}
               {{- end }}
             {{- end }}
-            # include secret environment variables only if not using the CSI driver.
-            {{- if not .Values.app.secretStoreCSI.enabled }}
-            {{- range $key, $val := .Values.app.env_secrets }}
-            - name: {{ $key }}
-              {{ toYaml $val | nindent 14 }}
-            {{- end }}
-            {{- end }}
           volumeMounts:
-            {{- if .Values.app.secretStoreCSI.enabled }}
-            - name: azure-keyvault-secrets
+            - name: secrets-volume
               mountPath: /mnt/secrets
               readOnly: true
-            {{- end }}
       volumes:
-        {{- if .Values.app.secretStoreCSI.enabled }}
-        - name: azure-keyvault-secrets
+        - name: secrets-volume
+        {{- if eq .Values.app.secrets.mode "key-vault" }}
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes:
-              secretProviderClass: {{ .Values.app.secretStoreCSI.className }}
+              secretProviderClass: {{ .Values.app.secrets.kvClassName | quote }}
+        {{- else if eq .Values.app.secrets.mode "k8s-secret" }}
+          secret:
+            secretName: {{ .Values.app.metadata.labels.secret }}
         {{- end }}
