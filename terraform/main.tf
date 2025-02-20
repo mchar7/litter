@@ -1,6 +1,11 @@
 ############################################################
 # MAIN INFRASTRUCTURE
 ############################################################
+data "azurerm_key_vault" "litter_kv" {
+  name                = var.kv_name
+  resource_group_name = var.kv_rg
+}
+
 resource "azurerm_resource_group" "litter_k8s_rg" {
   # named like: aks-litter-dev-eastus-rg-001
   # see: https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming
@@ -34,6 +39,9 @@ resource "azurerm_kubernetes_cluster" "aks" {
   network_profile {
     network_plugin    = "azure"
     load_balancer_sku = var.k8s_lb_az_sku
+  }
+  key_vault_secrets_provider {
+    secret_rotation_enabled = true
   }
 }
 
@@ -95,18 +103,39 @@ resource "kubernetes_namespace" "env" {
   ]
 }
 
-# create a secret to store the app secrets (mongo DB credentials, jwt-secret, etc.)
-resource "kubernetes_secret" "app_secret_values" {
-  type = "Opaque"
-  metadata {
-    name      = "${var.app_name}-secrets"
-    namespace = "${var.app_name}-${var.app_environment}"
-  }
-  data = {
-    "mongo-app-username" = data.azurerm_key_vault_secret.kv_db_user_username.value
-    "mongo-app-password" = data.azurerm_key_vault_secret.kv_db_user_password.value
-    "jwt-secret"         = data.azurerm_key_vault_secret.kv_jwt_secret.value
-  }
+locals {
+  # key vault provider name:
+  kv_provider_name = "${var.app_name}-kv-provider"
+}
+
+resource "kubectl_manifest" "az_kv_k8s_provider" {
+  # Using kubectl as a workaround for kubernetes_manifest requiring an active cluster/k8s API
+  # see: https://github.com/hashicorp/terraform-provider-kubernetes/issues/1775
+  yaml_body = <<EOF
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: ${local.kv_provider_name}
+  namespace: ${kubernetes_namespace.env.metadata[0].name}
+spec:
+  provider: azure
+  parameters:
+    usePodIdentity: "false"
+    useVMManagedIdentity: "true"
+    keyvaultName: "${var.kv_name}"
+    tenantId: "${data.azurerm_key_vault.litter_kv.tenant_id}"
+    objects: |-
+      array:
+        - |
+          objectName: db-user-username
+          objectType: secret
+        - |
+          objectName: db-user-password
+          objectType: secret
+        - |
+          objectName: jwt-secret
+          objectType: secret
+EOF
   depends_on = [kubernetes_namespace.env]
 }
 
@@ -117,7 +146,7 @@ resource "kubernetes_secret" "registry_secret" {
   type  = "kubernetes.io/dockerconfigjson"
   metadata {
     name      = "container-registry-secret"
-    namespace = "${var.app_name}-${var.app_environment}"
+    namespace = kubernetes_namespace.env.metadata[0].name
   }
   data = {
     ".dockerconfigjson" = data.azurerm_key_vault_secret.kv_docker_cfg[0].value
@@ -128,7 +157,7 @@ resource "kubernetes_secret" "registry_secret" {
 resource "kubernetes_service_account" "app_sa" {
   metadata {
     name      = "${var.app_name}-app-sa"
-    namespace = "${var.app_name}-${var.app_environment}"
+    namespace = kubernetes_namespace.env.metadata[0].name
   }
   # only specify the image pull secret on the SA if the respective secret exists in the Azure KV
   dynamic "image_pull_secret" {
@@ -145,7 +174,7 @@ resource "kubernetes_service_account" "app_sa" {
 resource "kubernetes_service_account" "db_sa" {
   metadata {
     name      = "${var.app_name}-db-sa"
-    namespace = "${var.app_name}-${var.app_environment}"
+    namespace = kubernetes_namespace.env.metadata[0].name
   }
   automount_service_account_token = false
   depends_on = [kubernetes_namespace.env]
@@ -158,7 +187,7 @@ resource "kubernetes_persistent_volume_claim" "mongo_db_pvc" {
   wait_until_bound = false # since it's dynamically provisioned, it won't bind until app chart is first deployed
   metadata {
     name      = "${var.app_name}-db-pvc"
-    namespace = "${var.app_name}-${var.app_environment}"
+    namespace = kubernetes_namespace.env.metadata[0].name
   }
   spec {
     storage_class_name = "managed-csi"
@@ -246,10 +275,10 @@ module "cert_manager" {
     }
   ]
   certificates = {
-    "${var.app_name}-${var.app_environment}" = {
-      namespace   = "${var.app_name}-${var.app_environment}"
+    "${kubernetes_namespace.env.metadata[0].name}-tls" = {
+      namespace   = kubernetes_namespace.env.metadata[0].name
       dns_names = ["${var.app_environment}.${var.az_dns_zone_name}"]
-      secret_name = "${var.app_name}-tls-${var.app_environment}"
+      secret_name = "${kubernetes_namespace.env.metadata[0].name}-tls"
     }
   }
   depends_on = [
@@ -262,8 +291,8 @@ module "cert_manager" {
 # ingress for application traffic (enforce HTTPS)
 resource "kubernetes_ingress_v1" "litter_ingress" {
   metadata {
-    name      = "${var.app_name}-ingress-${var.app_environment}"
-    namespace = "${var.app_name}-${var.app_environment}"
+    name      = "${kubernetes_namespace.env.metadata[0].name}-ingress"
+    namespace = kubernetes_namespace.env.metadata[0].name
     annotations = {
       "cert-manager.io/cluster-issuer"           = module.cert_manager.cluster_issuer_name
       "nginx.ingress.kubernetes.io/ssl-redirect" = "true"
@@ -273,7 +302,7 @@ resource "kubernetes_ingress_v1" "litter_ingress" {
     ingress_class_name = "nginx"
     tls {
       hosts = ["${var.app_environment}.${var.az_dns_zone_name}"]
-      secret_name = module.cert_manager.certificates["${var.app_name}-${var.app_environment}"].secret_name
+      secret_name = module.cert_manager.certificates[kubernetes_namespace.env.metadata[0].name].secret_name
     }
     rule {
       host = "${var.app_environment}.${var.az_dns_zone_name}"
@@ -307,7 +336,7 @@ resource "kubernetes_ingress_v1" "litter_ingress" {
 resource "helm_release" "litter" {
   name             = var.app_name
   chart            = "${path.root}/../chart"
-  namespace        = "${var.app_name}-${var.app_environment}"
+  namespace        = kubernetes_namespace.env.metadata[0].name
   create_namespace = false
   timeout          = 600
   wait             = true
@@ -330,12 +359,20 @@ resource "helm_release" "litter" {
     name  = "app.env.MONGO_DB"
     value = var.mongo_db_name
   }
-
+  set {
+    name  = "app.secrets.mode"
+    value = "key-vault"
+  }
+  set {
+    name  = "app.secrets.kvClassName"
+    value = local.kv_provider_name
+  }
   depends_on = [
     helm_release.nginx_ingress,
     kubernetes_service_account.db_sa,
     kubernetes_service_account.app_sa,
     kubernetes_persistent_volume_claim.mongo_db_pvc,
+    kubectl_manifest.az_kv_k8s_provider
   ]
 }
 
@@ -346,7 +383,7 @@ resource "helm_release" "litter" {
 resource "kubernetes_config_map" "mongo_sample_collections_cm" {
   metadata {
     name      = "mongo-sample-collections"
-    namespace = "${var.app_name}-${var.app_environment}"
+    namespace = kubernetes_namespace.env.metadata[0].name
   }
   data = {
     "litter_sample_users.json" = file("${var.mongo_sample_collections_dir}/litter_sample_users.json")
@@ -361,7 +398,7 @@ resource "kubernetes_job" "mongo_restore_job" {
   count = (var.mongo_restore_db && var.app_environment != "prod") ? 1 : 0
   metadata {
     name      = "mongo-restore-job"
-    namespace = "${var.app_name}-${var.app_environment}"
+    namespace = kubernetes_namespace.env.metadata[0].name
   }
   spec {
     backoff_limit = 1   # only try once
@@ -376,26 +413,16 @@ resource "kubernetes_job" "mongo_restore_job" {
           name  = "mongo-restore"
           image = "mongo:${var.mongo_version_tag}"
           command = ["/bin/sh", "-c"]
-          env {
-            name = "MONGO_APP_USERNAME"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.app_secret_values.metadata[0].name
-                key  = "mongo-app-username"
-              }
-            }
-          }
-          env {
-            name = "MONGO_APP_PASSWORD"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.app_secret_values.metadata[0].name
-                key  = "mongo-app-password"
-              }
-            }
-          }
           args = [
             <<-EOF
+              # set secrets from the CSI-mounted volume (files created by the Azure Key Vault provider)
+              export MONGO_APP_USERNAME=$(cat /mnt/secrets/db-user-username)
+              export MONGO_APP_PASSWORD=$(cat /mnt/secrets/db-user-password)
+
+              # set secrets from the mounted volume
+              export MONGO_APP_USERNAME=$(cat /mnt/secrets/db-user-username)
+              export MONGO_APP_PASSWORD=$(cat /mnt/secrets/db-user-password)
+
               # wait for MongoDB to be ready
               while ! mongosh --host ${var.app_name}-db --eval "db.adminCommand('ping')" >/dev/null 2>&1; do
                 echo "Waiting for MongoDB to be ready..."
@@ -434,6 +461,17 @@ resource "kubernetes_job" "mongo_restore_job" {
             name       = "mongo-sample-collections"
             mount_path = "/workspace"
           }
+          volume_mount {
+            name       = "secrets-volume"
+            mount_path = "/mnt/secrets"
+            read_only  = true
+          }
+          # mount the CSI volume for Key Vault secrets
+          volume_mount {
+            name       = "secrets-volume"
+            mount_path = "/mnt/secrets"
+            read_only  = true
+          }
           resources {
             requests = {
               cpu    = "100m"
@@ -452,8 +490,33 @@ resource "kubernetes_job" "mongo_restore_job" {
             name = kubernetes_config_map.mongo_sample_collections_cm.metadata[0].name
           }
         }
+        volume {
+          name = "secrets-volume"
+          csi {
+            driver    = "secrets-store.csi.k8s.io"
+            read_only = true
+            volume_attributes = {
+              secretProviderClass = kubectl_manifest.az_kv_k8s_provider.sensitive_fields
+            }
+          }
+        }
+        # CSI volume to mount Azure Key Vault secrets (provided by the SecretProviderClass)
+        volume {
+          name = "secrets-volume"
+          csi {
+            driver    = "secrets-store.csi.k8s.io"
+            read_only = true
+            volume_attributes = {
+              secretProviderClass = local.kv_provider_name
+            }
+          }
+        }
       }
     }
   }
-  depends_on = [helm_release.litter, kubernetes_config_map.mongo_sample_collections_cm]
+  depends_on = [
+    helm_release.litter,
+    kubernetes_config_map.mongo_sample_collections_cm,
+    kubectl_manifest.az_kv_k8s_provider
+  ]
 }

@@ -68,7 +68,7 @@ TODO: Document the API endpoints at the controller level using `springdoc-openap
 ## :building_construction: Project Structure
 
 ```
-litter-test
+litter
 ├── chart/              # Helm templates and values
 │
 ├── compose/            # Docker Compose files

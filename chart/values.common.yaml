@@ -5,10 +5,11 @@ app:
       app: litter-app
       sa: litter-app-sa
       component: app
+      secret: litter-secrets
     friendlyAppName: "Litter"
   image:
-    tag: ""        # will be overridden via Terraform
-    repository: "" # will be overridden via Terraform
+    tag: ""        # will be overridden
+    repository: "" # will be overridden
     pullPolicy: Always
   service:
     port: 8080
@@ -25,22 +26,14 @@ app:
   env:
     MONGO_HOST: "litter-db"
     MONGO_PORT: "27017"
-    MONGO_DB: "" # will be overridden via Terraform
-    MONGO_USER:
-      valueFrom:
-        secretKeyRef:
-          name: litter-secrets
-          key: mongo-app-username
-    MONGO_PASSWORD:
-      valueFrom:
-        secretKeyRef:
-          name: litter-secrets
-          key: mongo-app-password
-    JWT_SECRET:
-      valueFrom:
-        secretKeyRef:
-          name: litter-secrets
-          key: jwt-secret
+    MONGO_DB: "" # will be overridden
+  secrets:
+    mode: k8s-secret                  # set to "key-vault" to use Azure Key Vault, or "k8s-secret" to use k8s secret
+    kvClassName: "litter-kv-provider" # Azure Key Vault provider class name (if using Azure Key Vault)
+    values:
+      db-user-username: ""  # MongoDB username for Litter app
+      db-user-password: ""  # MongoDB password for Litter app
+      jwt-secret: ""        # JWT secret for Litter app
 mongo:
   replicaCount: 1
   metadata:

@@ -1,27 +1,14 @@
 ############################################################
 # RETRIEVE SECRETS FROM AZURE KEY VAULT
 ############################################################
+# Note: These secrets must also exist, but are not accessed by Terraform:
+#   - db-user-username  (MongoDB application username)
+#   - db-user-password  (MongoDB application password)
+#   - jwt-secret        (JWT secret for the app)
+
 data "azurerm_key_vault" "kv" {
   name                = var.kv_name
   resource_group_name = var.kv_rg
-}
-
-# The Key Vault secret for the MongoDB application username (database username for the Litter app)
-data "azurerm_key_vault_secret" "kv_db_user_username" {
-  name         = "db-user-username"
-  key_vault_id = data.azurerm_key_vault.kv.id
-}
-
-# The Key Vault secret for the MongoDB application password (database user password for the Litter app)
-data "azurerm_key_vault_secret" "kv_db_user_password" {
-  name         = "db-user-password"
-  key_vault_id = data.azurerm_key_vault.kv.id
-}
-
-# The Key Vault secret for the app's JWT secret
-data "azurerm_key_vault_secret" "kv_jwt_secret" {
-  name         = "jwt-secret"
-  key_vault_id = data.azurerm_key_vault.kv.id
 }
 
 # The Key Vault secret for the ACME email

@@ -1,16 +1,14 @@
-# read the environment variables to connect to the database
+# read the secret values from the mounted secrets volume
 spring:
   data:
     mongodb:
       host: ${MONGO_HOST:localhost}
       port: ${MONGO_PORT:27017}
       database: ${MONGO_DB:litter}
-      username: ${MONGO_USER:""}
-      password: ${MONGO_PASSWORD:""}
-
-# JWT secret is also read from its environment variable
+      username: ${file:/mnt/secrets/db-user-username}
+      password: ${file:/mnt/secrets/db-user-password}
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${file:/mnt/secrets/jwt-secret}
   issuer: litter
   expiration-time: 3600000 # 1 hour in milliseconds
 
