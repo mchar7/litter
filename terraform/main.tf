@@ -275,7 +275,7 @@ module "cert_manager" {
     }
   ]
   certificates = {
-    "${kubernetes_namespace.env.metadata[0].name}-tls" = {
+    kubernetes_namespace.env.metadata[0].name = {
       namespace   = kubernetes_namespace.env.metadata[0].name
       dns_names = ["${var.app_environment}.${var.az_dns_zone_name}"]
       secret_name = "${kubernetes_namespace.env.metadata[0].name}-tls"
@@ -496,7 +496,7 @@ resource "kubernetes_job" "mongo_restore_job" {
             driver    = "secrets-store.csi.k8s.io"
             read_only = true
             volume_attributes = {
-              secretProviderClass = kubectl_manifest.az_kv_k8s_provider.sensitive_fields
+              secretProviderClass = local.kv_provider_name
             }
           }
         }
