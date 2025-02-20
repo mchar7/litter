@@ -275,7 +275,7 @@ module "cert_manager" {
     }
   ]
   certificates = {
-    kubernetes_namespace.env.metadata[0].name = {
+    (kubernetes_namespace.env.metadata[0].name) = {
       namespace   = kubernetes_namespace.env.metadata[0].name
       dns_names = ["${var.app_environment}.${var.az_dns_zone_name}"]
       secret_name = "${kubernetes_namespace.env.metadata[0].name}-tls"
