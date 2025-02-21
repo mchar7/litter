@@ -47,7 +47,7 @@ jobs:
             echo "Workflow triggered manually."
 
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            echo "Complete event context JSON: ${{ toJson(github.event) }}"
+            echo "Complete event context JSON: '${{ toJson(github.event) }}'"
             echo "WF_RUN_HEAD: $WF_RUN_HEAD"
             echo "WF_RUN_PR_BASE: $WF_RUN_PR_BASE"
             echo "Workflow triggered by CI workflow's completion."
@@ -305,7 +305,7 @@ jobs:
     permissions:
       contents: read
       statuses: write
-    if: ${{ always() && github.event.workflow_run.pull_requests && github.event.workflow_run.pull_requests[0] }}
+    if: ${{ always() && github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests && github.event.workflow_run.pull_requests[0] }}
     steps:
       - name: Update PR status
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
