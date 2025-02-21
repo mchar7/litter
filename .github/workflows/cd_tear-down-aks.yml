@@ -1,14 +1,26 @@
-# This workflow automatically cleans up staging PR environment when a PR
-#   targeting the main branch is closed to avoid unnecessary Azure costs.
-name: PR Cleanup
+# This workflow removes all resources from a given environment to avoid unnecessary costs.
+# It is triggered when a PR is closed and the base branch is 'main', automatically cleaning up the staging environment.
+# It can also be manually dispatched to clean up the specified environment.
+name: Tear Down AKS Environment
 on:
+  # Allow manual trigger of workflow to destroy the specified environment
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        required: true
+        description: "Environment to destroy"
+        options:
+          - "dev"
+          - "staging"
+          - "prod"
+  # Automatically trigger when a PR is closed for the Staging environment
   pull_request:
     types: [ closed ]
-
 jobs:
   cleanup:
     runs-on: ubuntu-latest
-    if: ${{ github.event.pull_request.base.ref == 'main' }} # only run on PRs to main
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.base.ref == 'main' }}
     env:
       # Azure credentials (cannot use azure/login action with service principal)
       #   See: https://github.com/hashicorp/terraform-provider-azurerm/issues/22034
@@ -41,7 +53,8 @@ jobs:
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         env:
           STATE_KEY_PREFIX: "env-" # Prefix for the state key
-          WORKSPACE_CODE: "staging"
+          # staging if the PR is closed and the base branch is 'main', otherwise use the input value:
+          WORKSPACE_CODE: ${{ github.event.inputs.environment || github.event_name == 'pull_request' && 'staging' }}
         run: |
           # Construct the new key by prepending the prefix to the workspace code
           stateKey="${STATE_KEY_PREFIX}${WORKSPACE_CODE}.tfstate"
