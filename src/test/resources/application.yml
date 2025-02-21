@@ -1,0 +1,2 @@
+# this file needs to exist for the Mongo Testcontainers to work
+# no need to add any properties to it (yet)

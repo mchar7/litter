@@ -6,7 +6,7 @@ services:
       args:
         JAR_FILE: build/libs/litter.jar
     env_file:
-      - .env # your edited example.env
+      - example.env # your edited example.env
     ports:
       - "8080:8080"
       - "5005:5005" # for remote debugging

@@ -1,16 +1,16 @@
-# read the secret values from the mounted secrets volume
 spring:
+  config:
+    import: optional:configtree:/mnt/secrets/
   data:
     mongodb:
       host: ${MONGO_HOST:localhost}
       port: ${MONGO_PORT:27017}
       database: ${MONGO_DB:litter}
-      username: ${file:/mnt/secrets/db-user-username}
-      password: ${file:/mnt/secrets/db-user-password}
+      username: ${MONGO_USER}      # overridden via secrets volume if present
+      password: ${MONGO_PASSWORD}  # overridden via secrets volume if present
 jwt:
-  secret: ${file:/mnt/secrets/jwt-secret}
+  secret: ${JWT_SECRET} # overridden via secrets volume if present
   issuer: litter
   expiration-time: 3600000 # 1 hour in milliseconds
-
 server:
   port: 8080
