@@ -13,7 +13,7 @@ resource "azurerm_resource_group" "litter_k8s_rg" {
   location = var.k8s_location
 }
 
-resource "azurerm_kubernetes_cluster" "aks" {
+resource "azurerm_kubernetes_cluster" "aks-cluster" {
   name                      = "aks-cluster-${var.app_name}"
   dns_prefix                = "${var.app_name}-${var.app_environment}"
   location                  = azurerm_resource_group.litter_k8s_rg.location
@@ -49,12 +49,12 @@ resource "azurerm_public_ip" "litter_ip" {
   name                = "${var.app_name}-ip"
   sku                 = "Basic"
   allocation_method   = "Static"
-  location            = azurerm_kubernetes_cluster.aks.location
-  resource_group_name = azurerm_kubernetes_cluster.aks.node_resource_group
+  location            = azurerm_kubernetes_cluster.aks-cluster.location
+  resource_group_name = azurerm_kubernetes_cluster.aks-cluster.node_resource_group
 }
 
 # create/adjust the DNS A record to point to the app's public IP
-resource "azurerm_dns_a_record" "litter_dns" {
+resource "azurerm_dns_a_record" "litter_dns_a_rec" {
   name                = var.app_environment
   zone_name           = var.az_dns_zone_name
   resource_group_name = var.az_dns_rg
@@ -91,52 +91,16 @@ resource "helm_release" "nginx_ingress" {
 }
 
 ############################################################
-# NAMESPACES & SECRETS
+# NAMESPACES, SERVICE ACCOUNTS, AND SECRETS
 ############################################################
 resource "kubernetes_namespace" "env" {
   metadata {
     name = "${var.app_name}-${var.app_environment}"
   }
   depends_on = [
-    azurerm_kubernetes_cluster.aks,
-    azurerm_dns_a_record.litter_dns # ensure the DNS record is created early on to allow time to propagate
+    azurerm_kubernetes_cluster.aks-cluster,
+    azurerm_dns_a_record.litter_dns_a_rec # ensure the DNS record is created early on to allow time to propagate
   ]
-}
-
-locals {
-  # key vault provider name:
-  kv_provider_name = "${var.app_name}-kv-provider"
-}
-
-resource "kubectl_manifest" "az_kv_k8s_provider" {
-  # Using kubectl as a workaround for kubernetes_manifest requiring an active cluster/k8s API
-  # see: https://github.com/hashicorp/terraform-provider-kubernetes/issues/1775
-  yaml_body = <<EOF
-apiVersion: secrets-store.csi.x-k8s.io/v1
-kind: SecretProviderClass
-metadata:
-  name: ${local.kv_provider_name}
-  namespace: ${kubernetes_namespace.env.metadata[0].name}
-spec:
-  provider: azure
-  parameters:
-    usePodIdentity: "false"
-    useVMManagedIdentity: "true"
-    keyvaultName: "${var.kv_name}"
-    tenantId: "${data.azurerm_key_vault.litter_kv.tenant_id}"
-    objects: |-
-      array:
-        - |
-          objectName: db-user-username
-          objectType: secret
-        - |
-          objectName: db-user-password
-          objectType: secret
-        - |
-          objectName: jwt-secret
-          objectType: secret
-EOF
-  depends_on = [kubernetes_namespace.env]
 }
 
 # Docker registry secret is created only if the Docker config JSON secret (from Key Vault)
@@ -180,6 +144,69 @@ resource "kubernetes_service_account" "db_sa" {
   depends_on = [kubernetes_namespace.env]
 }
 
+locals {
+  kv_provider_name = "${var.app_name}-kv-provider"
+}
+
+resource "azurerm_user_assigned_identity" "kv_identity" {
+  name                = "${var.app_name}-kv-identity"
+  resource_group_name = azurerm_resource_group.litter_k8s_rg.name
+  location            = azurerm_resource_group.litter_k8s_rg.location
+}
+
+resource "azurerm_role_assignment" "kv_role" {
+  scope                = data.azurerm_key_vault.litter_kv.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = azurerm_user_assigned_identity.kv_identity.principal_id
+}
+
+resource "azurerm_federated_identity_credential" "kv_federated" {
+  name                = "kv-federated-credential"
+  resource_group_name = azurerm_resource_group.litter_k8s_rg.name
+  issuer              = azurerm_kubernetes_cluster.aks-cluster.oidc_issuer_url
+  subject             = "system:serviceaccount:${kubernetes_namespace.env.metadata[0].name}:${kubernetes_service_account.app_sa.metadata[0].name}"
+  audience = ["api://AzureADTokenExchange"]
+  parent_id           = azurerm_user_assigned_identity.kv_identity.id
+}
+
+resource "kubectl_manifest" "az_kv_k8s_provider" {
+  # Using kubectl as a workaround for kubernetes_manifest requiring an active cluster/k8s API
+  # see: https://github.com/hashicorp/terraform-provider-kubernetes/issues/1775
+  yaml_body = <<EOF
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: ${local.kv_provider_name}
+  namespace: ${kubernetes_namespace.env.metadata[0].name}
+spec:
+  provider: azure
+  parameters:
+    usePodIdentity: "false"
+    useVMManagedIdentity: "false"
+    keyvaultName: "${var.kv_name}"
+    tenantId: "${data.azurerm_key_vault.litter_kv.tenant_id}"
+    clientID: "${azurerm_user_assigned_identity.kv_identity.client_id}"
+    objects: |-
+      array:
+        - |
+          objectName: db-user-username
+          objectType: secret
+          objectAlias: spring/data/mongodb/username
+        - |
+          objectName: db-user-password
+          objectType: secret
+          objectAlias: spring/data/mongodb/password
+        - |
+          objectName: jwt-secret
+          objectType: secret
+          objectAlias: jwt/secret
+EOF
+  depends_on = [
+    kubernetes_namespace.env, azurerm_user_assigned_identity.kv_identity,
+    azurerm_federated_identity_credential.kv_federated
+  ]
+}
+
 ############################################################
 # STORAGE: PVC with dynamic provisioning
 ############################################################
@@ -202,7 +229,7 @@ resource "kubernetes_persistent_volume_claim" "mongo_db_pvc" {
 }
 
 # look up the existing Azure DNS zone
-data "azurerm_dns_zone" "litter_dns" {
+data "azurerm_dns_zone" "litter_dns_zone" {
   name                = var.az_dns_zone_name
   resource_group_name = var.az_dns_rg
 }
@@ -215,8 +242,8 @@ resource "azurerm_user_assigned_identity" "cert_manager_identity" {
 }
 
 # grant the managed identity permission to manage DNS records (DNS Zone Contributor)
-resource "azurerm_role_assignment" "cert_manager_dns" {
-  scope                = data.azurerm_dns_zone.litter_dns.id
+resource "azurerm_role_assignment" "cert_manager_role" {
+  scope                = data.azurerm_dns_zone.litter_dns_zone.id
   role_definition_name = "DNS Zone Contributor"
   principal_id         = azurerm_user_assigned_identity.cert_manager_identity.principal_id
 }
@@ -225,7 +252,7 @@ resource "azurerm_role_assignment" "cert_manager_dns" {
 resource "azurerm_federated_identity_credential" "cert_manager_federated" {
   name                = "cert-manager-federated-credential"
   resource_group_name = azurerm_resource_group.litter_k8s_rg.name
-  issuer              = azurerm_kubernetes_cluster.aks.oidc_issuer_url
+  issuer              = azurerm_kubernetes_cluster.aks-cluster.oidc_issuer_url
   subject             = "system:serviceaccount:cert-manager:cert-manager"
   audience = ["api://AzureADTokenExchange"]
   parent_id           = azurerm_user_assigned_identity.cert_manager_identity.id
@@ -326,7 +353,7 @@ resource "kubernetes_ingress_v1" "litter_ingress" {
   depends_on = [
     module.cert_manager,
     helm_release.litter,
-    azurerm_dns_a_record.litter_dns
+    azurerm_dns_a_record.litter_dns_a_rec
   ]
 }
 
@@ -338,7 +365,7 @@ resource "helm_release" "litter" {
   chart            = "${path.root}/../chart"
   namespace        = kubernetes_namespace.env.metadata[0].name
   create_namespace = false
-  timeout          = 600
+  timeout          = 300
   wait             = true
   wait_for_jobs = true
   # pass the values files to the Helm chart (files placed lower override those above them)
@@ -408,7 +435,9 @@ resource "kubernetes_job" "mongo_restore_job" {
         name = "mongo-restore-job"
       }
       spec {
-        restart_policy = "Never"
+        # use the service account with access to the Key Vault secrets
+        service_account_name = kubernetes_service_account.app_sa.metadata[0].name
+        restart_policy       = "Never"
         container {
           name  = "mongo-restore"
           image = "mongo:${var.mongo_version_tag}"
@@ -416,12 +445,8 @@ resource "kubernetes_job" "mongo_restore_job" {
           args = [
             <<-EOF
               # set secrets from the CSI-mounted volume (files created by the Azure Key Vault provider)
-              export MONGO_APP_USERNAME=$(cat /mnt/secrets/db-user-username)
-              export MONGO_APP_PASSWORD=$(cat /mnt/secrets/db-user-password)
-
-              # set secrets from the mounted volume
-              export MONGO_APP_USERNAME=$(cat /mnt/secrets/db-user-username)
-              export MONGO_APP_PASSWORD=$(cat /mnt/secrets/db-user-password)
+              export MONGO_APP_USERNAME=$(cat /mnt/secrets/spring/data/mongodb/username)
+              export MONGO_APP_PASSWORD=$(cat /mnt/secrets/spring/data/mongodb/password)
 
               # wait for MongoDB to be ready
               while ! mongosh --host ${var.app_name}-db --eval "db.adminCommand('ping')" >/dev/null 2>&1; do
@@ -461,11 +486,6 @@ resource "kubernetes_job" "mongo_restore_job" {
             name       = "mongo-sample-collections"
             mount_path = "/workspace"
           }
-          volume_mount {
-            name       = "secrets-volume"
-            mount_path = "/mnt/secrets"
-            read_only  = true
-          }
           # mount the CSI volume for Key Vault secrets
           volume_mount {
             name       = "secrets-volume"
@@ -490,17 +510,6 @@ resource "kubernetes_job" "mongo_restore_job" {
             name = kubernetes_config_map.mongo_sample_collections_cm.metadata[0].name
           }
         }
-        volume {
-          name = "secrets-volume"
-          csi {
-            driver    = "secrets-store.csi.k8s.io"
-            read_only = true
-            volume_attributes = {
-              secretProviderClass = local.kv_provider_name
-            }
-          }
-        }
-        # CSI volume to mount Azure Key Vault secrets (provided by the SecretProviderClass)
         volume {
           name = "secrets-volume"
           csi {
