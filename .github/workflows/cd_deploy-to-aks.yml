@@ -19,9 +19,9 @@ on:
         required: true
         description: "Deployment environment"
         options:
-          - "Staging"
-          - "Development"
-          - "Production"
+          - "dev"
+          - "staging"
+          - "prod"
       acme_provider_name:
         type: choice
         required: true
@@ -47,6 +47,9 @@ jobs:
             echo "Workflow triggered manually."
 
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "Complete event context JSON: ${{ toJson(github.event) }}"
+            echo "WF_RUN_HEAD: $WF_RUN_HEAD"
+            echo "WF_RUN_PR_BASE: $WF_RUN_PR_BASE"
             echo "Workflow triggered by CI workflow's completion."
 
             if [[ "${{ github.event.workflow_run.event }}" == "push" ]]; then
@@ -108,7 +111,6 @@ jobs:
       image_path: ${{ steps.image-path.outputs.image_path }}
       image_tag: ${{ steps.determine-image-tag.outputs.image_tag }}
       env_name: ${{ steps.determine-env.outputs.env_name }}
-      env_code: ${{ steps.determine-env.outputs.env_code }}
       env_url: ${{ steps.determine-env.outputs.env_url }}
       acme_provider_url: ${{ steps.determine-acme-url.outputs.acme_provider_url }}
       app_helm_overrides_filename: ${{ steps.select-helm-overrides.outputs.app_helm_overrides_filename }}
@@ -123,46 +125,32 @@ jobs:
           echo "image_path=$imagePath" >> $GITHUB_OUTPUT
           echo "Image path: $imagePath"
 
-      # Determine the deployment environment details (name, code, URL) based on the triggering context:
-      # - For manual dispatch, use the given input for environment name and pre-defined environment codes
+      # Determine the deployment environment details (name & URL) based on the triggering context:
+      # - For manual dispatch, use the given input for environment name
       # - For workflow_run:
       #   - If the CI workflow was triggered by a pull request event, deploy to the staging environment
       # - For push event (always to main branch):
-      #   - Deploy to production environment, with environment code "prod"
+      #   - Deploy to production environment
       - name: Determine Environment
         id: determine-env
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             envName="${{ github.event.inputs.environment }}"
-            case "$envName" in
-              "Production")
-                envCode="prod"
-                ;;
-              "Staging")
-                envCode="staging"
-                ;;
-              "Development")
-                envCode="dev"
-                ;;
-            esac
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             if [[ "${{ github.event.workflow_run.event }}" == "pull_request" ]]; then
-              envName="Staging"
-              envCode="staging"
+              envName="staging"
             else  # push events to main branch; deploy to production
-              envName="Production"
-              envCode="prod"
+              envName="prod"
             fi
           else
             echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
           fi
-          # set env URL based on env code (e.g. "https://staging.litter.dev")
-          envURL="https://$envCode.$ROOT_DOMAIN"
+          # set env URL based on env name (e.g. "https://staging.litter.dev")
+          envURL="https://$envName.$ROOT_DOMAIN"
 
           echo "env_name=$envName"  >> $GITHUB_OUTPUT
-          echo "env_code=$envCode"  >> $GITHUB_OUTPUT
           echo "env_url=$envURL"    >> $GITHUB_OUTPUT
-          echo "Environment: '$envName' (code: '$envCode', URL: '$envURL')"
+          echo "Environment: '$envName' (URL: '$envURL')"
 
       # Determine the correct ACME Server URL based on the triggering context:
       # - For workflow_dispatch:
@@ -183,7 +171,7 @@ jobs:
               echo "Error: Unsupported ACME provider '${{ github.event.inputs.acme_provider_name }}'."; exit 1
             fi
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            if [[ ${{ steps.determine-env.outputs.env_code }} == "prod" ]]; then
+            if [[ ${{ steps.determine-env.outputs.env_name }} == "prod" ]]; then
               acmeProviderURL="https://acme-v02.api.letsencrypt.org/directory"
             else
               acmeProviderURL="https://acme-staging-v02.api.letsencrypt.org/directory"
@@ -227,10 +215,10 @@ jobs:
       - name: Select Helm Overrides File
         id: select-helm-overrides
         run: |
-          envCode="${{ steps.determine-env.outputs.env_code }}"
-          if [[ "$envCode" == "prod" ]]; then
+          envName="${{ steps.determine-env.outputs.env_name }}"
+          if [[ "$envName" == "prod" ]]; then
             overrideFile="values.prod.yaml"
-          elif [[ "$envCode" == "staging" ]]; then
+          elif [[ "$envName" == "staging" ]]; then
             overrideFile="values.staging.yaml"
           else
             overrideFile="values.dev.yaml"
@@ -275,7 +263,7 @@ jobs:
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
         env:
           STATE_KEY_PREFIX: "env-" # Prefix for the state key
-          WORKSPACE_CODE: ${{ needs.prepare-deployment.outputs.env_code }}
+          WORKSPACE_CODE: ${{ needs.prepare-deployment.outputs.env_name }}
         run: |
           # Construct the new key by prepending the prefix to the workspace code
           stateKey="${STATE_KEY_PREFIX}${WORKSPACE_CODE}.tfstate"
@@ -302,7 +290,7 @@ jobs:
             -var "az_subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var "acme_provider_url=${{ needs.prepare-deployment.outputs.acme_provider_url }}" \
             -var "app_helm_overrides_filename=${{ needs.prepare-deployment.outputs.app_helm_overrides_filename }}" \
-            -var "app_environment=${{ needs.prepare-deployment.outputs.env_code }}" \
+            -var "app_environment=${{ needs.prepare-deployment.outputs.env_name }}" \
             -var "app_image_repo_url=${{ needs.prepare-deployment.outputs.image_path }}" \
             -var "app_image_tag=${{ needs.prepare-deployment.outputs.image_tag }}" \
             -out=tfplan
