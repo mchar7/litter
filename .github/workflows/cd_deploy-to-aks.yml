@@ -47,6 +47,9 @@ jobs:
             echo "Workflow triggered manually."
 
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "Complete event context JSON: ${{ toJson(github.event) }}"
+            echo "WF_RUN_HEAD: $WF_RUN_HEAD"
+            echo "WF_RUN_PR_BASE: $WF_RUN_PR_BASE"
             echo "Workflow triggered by CI workflow's completion."
 
             if [[ "${{ github.event.workflow_run.event }}" == "push" ]]; then
