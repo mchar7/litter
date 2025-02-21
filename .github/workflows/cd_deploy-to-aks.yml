@@ -255,7 +255,7 @@ jobs:
       url: ${{ needs.prepare-deployment.outputs.env_url }}
     permissions:
       contents: read
-    timeout-minutes: 25 # This can take a WHILE, especially on first deployment & with cheap node SKUs
+    timeout-minutes: 20 # This can take a WHILE, especially on first deployment & with cheap node SKUs
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
