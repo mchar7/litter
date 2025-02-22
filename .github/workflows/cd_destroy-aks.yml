@@ -1,7 +1,7 @@
 # This workflow removes all resources from a given environment to avoid unnecessary costs.
 # It is triggered when a PR is closed and the base branch is 'main', automatically cleaning up the staging environment.
 # It can also be manually dispatched to clean up the specified environment.
-name: Destroy AKS Environment
+name: CD - Destroy AKS Env
 on:
   # Allow manual trigger of workflow to destroy the specified environment
   workflow_dispatch:
