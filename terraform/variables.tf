@@ -85,7 +85,7 @@ variable "app_helm_overrides_filename" {
 variable "app_health_probe_path" {
   type        = string
   description = "The HTTP path used for the Azure Load Balancer health probe"
-  default     = "/healthz"
+  default     = "/actuator/health"
 }
 
 ############################################################
@@ -139,6 +139,12 @@ variable "kv_name" {
 variable "use_kv_docker_cfg" {
   type        = bool
   description = "Set to true to read the optional docker-cfg Key Vault secret (for private registries)"
+  default     = false
+}
+
+variable "use_kv_tls_cert" {
+  type        = bool
+  description = "Set to true to read the optional tls-cert Key Vault secret (for TLS certificates)"
   default     = false
 }
 

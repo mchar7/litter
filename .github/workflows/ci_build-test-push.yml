@@ -1,7 +1,7 @@
 # This workflow verifies that the code compiles & tests pass on every push, pull request, or manual run.
 # It also builds and pushes the Docker image when run by a pull request (to the main branch only)
 #   or via workflow_dispatch (any branch).
-name: CI
+name: CI - Build and Push
 on:
   push: { }
   pull_request:

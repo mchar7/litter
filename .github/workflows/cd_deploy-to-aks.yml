@@ -8,7 +8,7 @@ env:
 on:
   # Trigger deployment after successful CI run (for both merged commits and PR builds)
   workflow_run:
-    workflows: [ CI ]
+    workflows: [ CI - Build and Push ]
     types:
       - completed
   # Allow manual trigger of workflow to deploy to specified environment
@@ -30,6 +30,11 @@ on:
         options:
           - "Let's Encrypt - Production"  # Ideal when deploying to publicly accessible domain
           - "Let's Encrypt - Staging"     # Ideal when frequently testing deployment (avoid rate limits on prod server)
+      use_tls_from_kv:
+        type: boolean
+        required: false
+        default: false
+        description: "Use TLS cert & key from Key Vault? (always true for prod)"
 jobs:
   check-context:
     runs-on: ubuntu-latest
@@ -47,7 +52,6 @@ jobs:
             echo "Workflow triggered manually."
 
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            echo "Complete event context JSON: '${{ toJson(github.event) }}'"
             echo "WF_RUN_HEAD: $WF_RUN_HEAD"
             echo "WF_RUN_PR_BASE: $WF_RUN_PR_BASE"
             echo "Workflow triggered by CI workflow's completion."
@@ -113,6 +117,7 @@ jobs:
       env_name: ${{ steps.determine-env.outputs.env_name }}
       env_url: ${{ steps.determine-env.outputs.env_url }}
       acme_provider_url: ${{ steps.determine-acme-url.outputs.acme_provider_url }}
+      use_tls_from_kv: ${{ steps.determine-tls-cert-source.outputs.use_tls_from_kv }}
       app_helm_overrides_filename: ${{ steps.select-helm-overrides.outputs.app_helm_overrides_filename }}
     steps:
       # Image repo must be lowercase and GitHub Actions doesn't have easy string manipulation.
@@ -226,6 +231,26 @@ jobs:
           echo "app_helm_overrides_filename=$overrideFile" >> $GITHUB_OUTPUT
           echo "Selected override file: $overrideFile"
 
+      # Decide whether or not to use an existing TLS cert & key from the Azure Key Vault:
+      # If event is workflow_run:
+      #  - "prod" -----------> true; use values from KV
+      #  - other ------------> false; generate new cert
+      # If event is workflow_dispatch:
+      #  - "prod" -----------> true; use values from KV
+      #  - other ------------> defer to user input
+      - name: Determine TLS Cert Source
+        id: determine-tls-cert-source
+        run: |
+          if [[ "${{ steps.determine-env.outputs.env_name }}" == "prod" ]]; then
+            useTLSFromKV=true
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            useTLSFromKV=${{ github.event.inputs.use_tls_from_kv || false }}
+          else
+            useTLSFromKV=false
+          fi
+          echo "use_tls_from_kv=$useTLSFromKV" >> $GITHUB_OUTPUT
+          echo "Use TLS cert from Key Vault?: $useTLSFromKV"
+
   deploy-to-aks:
     needs: [ prepare-deployment, check-context ]
     runs-on: ubuntu-latest
@@ -293,6 +318,7 @@ jobs:
             -var "app_environment=${{ needs.prepare-deployment.outputs.env_name }}" \
             -var "app_image_repo_url=${{ needs.prepare-deployment.outputs.image_path }}" \
             -var "app_image_tag=${{ needs.prepare-deployment.outputs.image_tag }}" \
+            -var "use_kv_tls_cert=${{ needs.prepare-deployment.outputs.use_tls_from_kv }}" \
             -out=tfplan
 
       - name: Terraform apply

@@ -1,11 +1,6 @@
 ############################################################
 # MAIN INFRASTRUCTURE
 ############################################################
-data "azurerm_key_vault" "litter_kv" {
-  name                = var.kv_name
-  resource_group_name = var.kv_rg
-}
-
 resource "azurerm_resource_group" "litter_k8s_rg" {
   # named like: aks-litter-dev-eastus-rg-001
   # see: https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming
@@ -45,53 +40,8 @@ resource "azurerm_kubernetes_cluster" "aks-cluster" {
   }
 }
 
-resource "azurerm_public_ip" "litter_ip" {
-  name                = "${var.app_name}-ip"
-  sku                 = "Basic"
-  allocation_method   = "Static"
-  location            = azurerm_kubernetes_cluster.aks-cluster.location
-  resource_group_name = azurerm_kubernetes_cluster.aks-cluster.node_resource_group
-}
-
-# create/adjust the DNS A record to point to the app's public IP
-resource "azurerm_dns_a_record" "litter_dns_a_rec" {
-  name                = var.app_environment
-  zone_name           = var.az_dns_zone_name
-  resource_group_name = var.az_dns_rg
-  ttl = 300 # keep low for rapid testing/iteration
-  records = [azurerm_public_ip.litter_ip.ip_address]
-}
-
 ############################################################
-# HELM: NGINX INGRESS CONTROLLER
-############################################################
-resource "helm_release" "nginx_ingress" {
-  name             = "ingress-nginx"
-  repository       = "https://kubernetes.github.io/ingress-nginx"
-  chart            = "ingress-nginx"
-  version          = "~> 4.12.0"
-  namespace        = "ingress-nginx"
-  create_namespace = true
-  wait             = true
-  wait_for_jobs = true # needed for Cert Manager to startup correctly
-  timeout          = 600
-  set {
-    name  = "controller.service.type"
-    value = "LoadBalancer"
-  }
-  set {
-    name  = "controller.service.loadBalancerIP"
-    value = azurerm_public_ip.litter_ip.ip_address
-  }
-  set {
-    name  = "controller.service.annotations.service\\.beta\\.kubernetes\\.io/azure-load-balancer-health-probe-request-path"
-    value = var.app_health_probe_path
-  }
-  depends_on = [azurerm_public_ip.litter_ip]
-}
-
-############################################################
-# NAMESPACES, SERVICE ACCOUNTS, AND SECRETS
+# NAMESPACES, SERVICE ACCOUNTS, KEY VAULT, AND SECRETS
 ############################################################
 resource "kubernetes_namespace" "env" {
   metadata {
@@ -155,9 +105,9 @@ resource "azurerm_user_assigned_identity" "kv_identity" {
 }
 
 resource "azurerm_role_assignment" "kv_role" {
-  scope                = data.azurerm_key_vault.litter_kv.id
-  role_definition_name = "Key Vault Secrets Officer"
-  principal_id         = azurerm_user_assigned_identity.kv_identity.principal_id
+  scope        = data.azurerm_key_vault.litter_kv.id
+  role_definition_name = "Key Vault Secrets User" # read-only access to secrets
+  principal_id = azurerm_user_assigned_identity.kv_identity.principal_id
 }
 
 resource "azurerm_federated_identity_credential" "kv_federated" {
@@ -228,6 +178,51 @@ resource "kubernetes_persistent_volume_claim" "mongo_db_pvc" {
   depends_on = [kubernetes_namespace.env]
 }
 
+############################################################
+# NETWORKING: Ingress, TLS Certificates, IP, and DNS
+############################################################
+resource "azurerm_public_ip" "litter_ip" {
+  name                = "${var.app_name}-ip"
+  sku                 = "Basic"
+  allocation_method   = "Static"
+  location            = azurerm_kubernetes_cluster.aks-cluster.location
+  resource_group_name = azurerm_kubernetes_cluster.aks-cluster.node_resource_group
+}
+
+# create/adjust the DNS A record to point to the app's public IP
+resource "azurerm_dns_a_record" "litter_dns_a_rec" {
+  name                = var.app_environment
+  zone_name           = var.az_dns_zone_name
+  resource_group_name = var.az_dns_rg
+  ttl = 300 # keep low for rapid testing/iteration
+  records = [azurerm_public_ip.litter_ip.ip_address]
+}
+
+resource "helm_release" "nginx_ingress" {
+  name             = "ingress-nginx"
+  repository       = "https://kubernetes.github.io/ingress-nginx"
+  chart            = "ingress-nginx"
+  version          = "~> 4.12.0"
+  namespace        = "ingress-nginx"
+  create_namespace = true
+  wait             = true
+  wait_for_jobs = true # needed for Cert Manager to startup correctly
+  timeout          = 600
+  set {
+    name  = "controller.service.type"
+    value = "LoadBalancer"
+  }
+  set {
+    name  = "controller.service.loadBalancerIP"
+    value = azurerm_public_ip.litter_ip.ip_address
+  }
+  set {
+    name  = "controller.service.annotations.service\\.beta\\.kubernetes\\.io/azure-load-balancer-health-probe-request-path"
+    value = var.app_health_probe_path
+  }
+  depends_on = [azurerm_public_ip.litter_ip]
+}
+
 # look up the existing Azure DNS zone
 data "azurerm_dns_zone" "litter_dns_zone" {
   name                = var.az_dns_zone_name
@@ -242,9 +237,16 @@ resource "azurerm_user_assigned_identity" "cert_manager_identity" {
 }
 
 # grant the managed identity permission to manage DNS records (DNS Zone Contributor)
-resource "azurerm_role_assignment" "cert_manager_role" {
+resource "azurerm_role_assignment" "cert_manager_dns_role" {
   scope                = data.azurerm_dns_zone.litter_dns_zone.id
   role_definition_name = "DNS Zone Contributor"
+  principal_id         = azurerm_user_assigned_identity.cert_manager_identity.principal_id
+}
+
+# grant the managed identity permission to read Key Vault secrets
+resource "azurerm_role_assignment" "cert_manager_kv_role" {
+  scope                = data.azurerm_key_vault.litter_kv.id
+  role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_user_assigned_identity.cert_manager_identity.principal_id
 }
 
@@ -256,6 +258,18 @@ resource "azurerm_federated_identity_credential" "cert_manager_federated" {
   subject             = "system:serviceaccount:cert-manager:cert-manager"
   audience = ["api://AzureADTokenExchange"]
   parent_id           = azurerm_user_assigned_identity.cert_manager_identity.id
+}
+
+resource "kubernetes_secret" "k8s_ssl_cert_from_kv" {
+  count = var.use_kv_tls_cert ? 1 : 0
+  metadata {
+    name = "${kubernetes_namespace.env.metadata[0].name}-tls" # Same secret name as expected by cert-manager
+    namespace = kubernetes_namespace.env.metadata[0].name
+  }
+  data = {
+    "tls.crt" = base64decode(data.azurerm_key_vault_secret.kv_tls_cert[0].value)
+    "tls.key" = base64decode(data.azurerm_key_vault_secret.kv_tls_key[0].value)
+  }
 }
 
 module "cert_manager" {

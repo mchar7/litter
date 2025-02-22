@@ -26,17 +26,18 @@ app_health_probe_path = "/actuator/health"
 # app_helm_overrides_filename = "values.overrides.yaml"
 
 # mongo configuration
-mongo_version_tag           = "8.0"
-mongo_db_name               = "litter"
-mongo_restore_db            = true
-mongo_overwrite_existing_db = false
+mongo_version_tag            = "8.0"
+mongo_db_name                = "litter"
+mongo_restore_db             = true
+mongo_overwrite_existing_db  = false
 mongo_sample_collections_dir = "./resources/sample_data"
 
 # ACME and domain configuration
-acme_provider_url = "https://acme-v02.api.letsencrypt.org/directory" # Let's Encrypt production server
-# acme_provider_url = "https://acme-staging-v02.api.letsencrypt.org/directory" # staging server
+# acme_provider_url = "https://acme-v02.api.letsencrypt.org/directory" # Let's Encrypt production server
+acme_provider_url = "https://acme-staging-v02.api.letsencrypt.org/directory" # staging server
 
 # key vault configuration (all sensitive secrets are stored in the KV)
 kv_rg             = "litter-kv-rg"
 kv_name           = "litter-kv"
-use_kv_docker_cfg = true
+use_kv_docker_cfg = false
+use_kv_tls_cert   = false
