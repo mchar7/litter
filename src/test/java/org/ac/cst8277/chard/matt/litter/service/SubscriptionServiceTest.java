@@ -142,6 +142,7 @@ class SubscriptionServiceTest {
 
         User subscriber = new User();
         subscriber.setId(TEST_SUBSCRIBER_ID);
+        subscriber.setUsername(TEST_SUBSCRIBER_USERNAME);
         JwtClaimAccessor subscriberJwt = () -> Map.of("sub", TEST_SUBSCRIBER_USERNAME);
 
         User producer = new User();
@@ -212,6 +213,7 @@ class SubscriptionServiceTest {
 
         User subscriber = new User();
         subscriber.setId(TEST_SUBSCRIBER_ID);
+        subscriber.setUsername(TEST_SUBSCRIBER_USERNAME);
         JwtClaimAccessor subscriberJwt = () -> Map.of("sub", TEST_SUBSCRIBER_USERNAME);
 
         User producer = new User();
@@ -248,6 +250,7 @@ class SubscriptionServiceTest {
 
         User subscriber = new User();
         subscriber.setId(TEST_SUBSCRIBER_ID);
+        subscriber.setUsername(TEST_SUBSCRIBER_USERNAME);
         JwtClaimAccessor subscriberJwt = () -> Map.of("sub", TEST_SUBSCRIBER_USERNAME);
 
         User producer = new User();
@@ -296,13 +299,7 @@ class SubscriptionServiceTest {
 
         // expect flux of subscriptions
         StepVerifier.create(subscriptionService.getSubscriptionsForUser(subscriberJwt))
-                .assertNext(flux -> {
-                    // chain StepVerifier again to verify flux content
-                    StepVerifier.create(flux)
-                            .expectNext(sub1)
-                            .expectNext(sub2)
-                            .verifyComplete();
-                })
+                .expectNext(sub1, sub2)
                 .verifyComplete();
 
         verify(subscriptionRepository).findBySubscriberId(TEST_SUBSCRIBER_ID);

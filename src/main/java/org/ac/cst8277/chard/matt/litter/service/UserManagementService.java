@@ -1,11 +1,10 @@
 package org.ac.cst8277.chard.matt.litter.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.ac.cst8277.chard.matt.litter.model.User;
 import org.ac.cst8277.chard.matt.litter.repository.UserRepository;
 import org.ac.cst8277.chard.matt.litter.security.JwtUtils;
 import org.ac.cst8277.chard.matt.litter.security.LogSanitizer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,17 +23,19 @@ import static org.ac.cst8277.chard.matt.litter.model.User.ROLES_HASHMAP_DEFAULT_
 /**
  * Service class for User objects.
  */
+@Slf4j
 @Service
 public class UserManagementService {
     private static final String USERNAME_INVALID_MESSAGE = """
             Invalid username. \
             Username must be at least 3 characters long \
             and contain only alphanumeric characters.""";
-    private static final Logger logger = LoggerFactory.getLogger(UserManagementService.class);
+
     // field names as stored in the database
     private static final String FIELD_ID = "id";
     private static final String FIELD_ROLES = "roles";
     private static final String FIELD_USERNAME = "username";
+
     // messages for exceptions
     private static final String INVALID_CREDENTIALS_MESSAGE = "Invalid credentials";
     private static final String USERNAME_TAKEN_MESSAGE = "User already exists";
@@ -115,18 +116,18 @@ public class UserManagementService {
      */
     public Mono<User> register(String username, String password) {
         if (isUsernameErroneous(username)) {
-            logger.warn("Attempt to register with invalid username: {}", LogSanitizer.sanitize(username));
+            log.warn("Attempt to register with invalid username: {}", LogSanitizer.sanitize(username));
             return Mono.error(new IllegalArgumentException(USERNAME_INVALID_MESSAGE));
         }
         if (isPasswordWeak(password)) {
-            logger.warn("Attempt to register with insecure password. Username: {}", LogSanitizer.sanitize(username));
+            log.warn("Attempt to register with insecure password. Username: {}", LogSanitizer.sanitize(username));
             return Mono.error(new IllegalArgumentException(PASSWORD_INSECURE_MESSAGE));
         }
 
         return userRepository.findByUsername(username)
                 // run through passwordMeetsRequirements to ensure data is valid
                 .flatMap(existingUser -> {
-                    logger.warn("Attempt to register existing username: {}", LogSanitizer.sanitize(username));
+                    log.warn("Attempt to register existing username: {}", LogSanitizer.sanitize(username));
                     return Mono.<User>error(new IllegalArgumentException(USERNAME_TAKEN_MESSAGE));
                 })
                 .switchIfEmpty(Mono.defer(() -> {
@@ -134,7 +135,7 @@ public class UserManagementService {
                     user.setUsername(username);
                     user.setPasswordHash(passwordEncoder.encode(password));
                     user.setRoles(List.of(User.DB_USER_ROLE_SUBSCRIBER_NAME));
-                    logger.info("Registering new user: {}", LogSanitizer.sanitize(username));
+                    log.info("Registering new user: {}", LogSanitizer.sanitize(username));
                     return userRepository.save(user);
                 }));
     }
@@ -148,11 +149,11 @@ public class UserManagementService {
      */
     public Mono<String> login(String username, String password) {
         if (isUsernameErroneous(username)) {
-            logger.warn("Attempt to login with invalid username: {}", LogSanitizer.sanitize(username));
+            log.warn("Attempt to login with invalid username: {}", LogSanitizer.sanitize(username));
             return Mono.error(new IllegalArgumentException(USERNAME_INVALID_MESSAGE));
         }
         if (isPasswordWeak(password)) {
-            logger.warn("Attempt to login with insecure password. Username: {}", LogSanitizer.sanitize(username));
+            log.warn("Attempt to login with insecure password. Username: {}", LogSanitizer.sanitize(username));
             return Mono.error(new IllegalArgumentException(PASSWORD_INSECURE_MESSAGE));
         }
         return userRepository.findByUsername(username)
@@ -160,7 +161,7 @@ public class UserManagementService {
                 .switchIfEmpty(Mono.error(new BadCredentialsException(USER_NOT_FOUND_MESSAGE)))
                 .filter(user -> passwordEncoder.matches(password, user.getPasswordHash()))
                 .map(user -> {
-                    logger.info("User logged in successfully: {}", LogSanitizer.sanitize(username));
+                    log.info("User logged in successfully: {}", LogSanitizer.sanitize(username));
                     return jwtUtils.generateToken(user);
                 })
                 .switchIfEmpty(Mono.error(new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE)));
@@ -195,7 +196,7 @@ public class UserManagementService {
      * @return Flux of User objects with the specified role.
      */
     public Flux<User> getAllUsersByRole(String role) {
-        logger.info("Fetching all users with role: {}", role);
+        log.info("Fetching all users with role: {}", role);
         return userRepository.findAll()
                 .filter(user -> user.getRoles().contains(role));
     }
@@ -206,7 +207,7 @@ public class UserManagementService {
      * @return Flux of all users
      */
     public Flux<Map<String, Object>> getAllUsers() {
-        logger.info("Fetching all users");
+        log.info("Fetching all users");
         return userRepository.findAll()
                 .map(user -> {
                     Map<String, Object> userMap = HashMap.newHashMap(ROLES_HASHMAP_DEFAULT_CAP);

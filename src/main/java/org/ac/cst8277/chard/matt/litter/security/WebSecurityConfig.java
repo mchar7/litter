@@ -1,8 +1,7 @@
 package org.ac.cst8277.chard.matt.litter.security;
 
+import lombok.extern.slf4j.Slf4j;
 import org.ac.cst8277.chard.matt.litter.model.User;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -24,11 +23,10 @@ import java.nio.charset.StandardCharsets;
 /**
  * Configuration class for web security.
  */
+@Slf4j
 @Configuration
 @EnableWebFluxSecurity
 class WebSecurityConfig {
-    private static final Logger logger = LoggerFactory.getLogger(WebSecurityConfig.class);
-
     private static final String[] AUTH_WHITELIST = {
             "/user/login",
             "/user/register",
@@ -50,7 +48,7 @@ class WebSecurityConfig {
      * @return A Mono representing the completion of the response writing
      */
     private static Mono<Void> authenticationEntryPoint(ServerWebExchange exchange, AuthenticationException err) {
-        logger.warn("Authentication failed: {}", err.getMessage());
+        log.warn("Authentication failed: {}", err.getMessage());
         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
         exchange.getResponse().getHeaders().setContentType(MediaType.TEXT_PLAIN);
 
@@ -73,7 +71,7 @@ class WebSecurityConfig {
      */
     @Bean
     private static Argon2PasswordEncoder instantiatePasswordEncoder() {
-        logger.info("Creating Argon2PasswordEncoder");
+        log.info("Creating Argon2PasswordEncoder");
         return Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8();
     }
 
@@ -95,11 +93,12 @@ class WebSecurityConfig {
             ServerHttpSecurity http,
             JwtAuthenticationConverter jwtAuthConverter
     ) {
-        logger.info("Configuring security filter chain");
+        log.info("Configuring security filter chain");
         return http
                 .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
+                .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(AUTH_WHITELIST).permitAll()
                         .pathMatchers(AUTH_ADMIN_ONLY).hasRole(User.DB_USER_ROLE_ADMIN_NAME)

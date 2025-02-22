@@ -2,9 +2,8 @@ package org.ac.cst8277.chard.matt.litter.security;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
 import org.ac.cst8277.chard.matt.litter.model.User;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -27,10 +26,9 @@ import static org.ac.cst8277.chard.matt.litter.model.User.ROLES_HASHMAP_DEFAULT_
 /**
  * Utility class for JWT operations.
  */
+@Slf4j
 @Component
 public class JwtUtils {
-    private static final Logger logger = LoggerFactory.getLogger(JwtUtils.class);
-
     private static final String ROLES_CLAIM = "roles";
     private static final String ROLE_PREFIX = "ROLE_";
 
@@ -50,7 +48,7 @@ public class JwtUtils {
      */
     @Bean
     protected ReactiveJwtDecoder jwtDecoder() {
-        logger.info("Initializing JWT decoder");
+        log.info("Initializing JWT decoder");
         return NimbusReactiveJwtDecoder
                 .withSecretKey(getSigningKey())
                 .macAlgorithm(MacAlgorithm.HS512)
@@ -73,7 +71,7 @@ public class JwtUtils {
      */
     @Bean
     private JwtAuthenticationConverter jwtAuthenticationConverter() {
-        logger.info("Initializing JWT authentication converter");
+        log.info("Initializing JWT authentication converter");
         JwtGrantedAuthoritiesConverter grantedAuthConverter = new JwtGrantedAuthoritiesConverter();
         grantedAuthConverter.setAuthoritiesClaimName(ROLES_CLAIM);
         grantedAuthConverter.setAuthorityPrefix(ROLE_PREFIX);
@@ -92,11 +90,11 @@ public class JwtUtils {
      */
     public String generateToken(User user) {
         if (null == user.getUsername()) {
-            logger.error("Cannot generate token: Username is null");
+            log.error("Cannot generate token: Username is null");
             throw new JwtEncodingException("Cannot generate token for a user with a null username.");
         }
 
-        logger.info("Generating JWT token for user: {}", user.getUsername());
+        log.info("Generating JWT token for user: {}", user.getUsername());
         Map<String, Object> claims = HashMap.newHashMap(ROLES_HASHMAP_DEFAULT_CAP);
         claims.put(ROLES_CLAIM, user.getRoles());
 
