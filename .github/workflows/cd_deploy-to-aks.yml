@@ -233,20 +233,19 @@ jobs:
 
       # Decide whether or not to use an existing TLS cert & key from the Azure Key Vault:
       # If event is workflow_run:
-      #  - "prod" -----------> true; use values from KV
-      #  - other ------------> false; generate new cert
+      #  - always ------------> true; use values from KV
       # If event is workflow_dispatch:
-      #  - "prod" -----------> true; use values from KV
-      #  - other ------------> defer to user input
+      #  - "prod" ------------> true; use values from KV
+      #  - other -------------> defer to user input (default to false)
       - name: Determine TLS Cert Source
         id: determine-tls-cert-source
         run: |
-          if [[ "${{ steps.determine-env.outputs.env_name }}" == "prod" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch"; then
+            useTLSFromKV=${{ steps.determine-env.outputs.env_name == 'prod' || github.event.inputs.use_tls_from_kv || false }}
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             useTLSFromKV=true
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            useTLSFromKV=${{ github.event.inputs.use_tls_from_kv || false }}
           else
-            useTLSFromKV=false
+            echo "Error: Unsupported event '${{ github.event_name }}'."; exit 1
           fi
           echo "use_tls_from_kv=$useTLSFromKV" >> $GITHUB_OUTPUT
           echo "Use TLS cert from Key Vault?: $useTLSFromKV"
