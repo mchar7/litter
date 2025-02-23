@@ -1,11 +1,10 @@
 package org.ac.cst8277.chard.matt.litter.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.ac.cst8277.chard.matt.litter.model.Subscription;
 import org.ac.cst8277.chard.matt.litter.model.User;
 import org.ac.cst8277.chard.matt.litter.repository.SubscriptionRepository;
 import org.ac.cst8277.chard.matt.litter.security.LogSanitizer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.oauth2.jwt.JwtClaimAccessor;
 import org.springframework.stereotype.Service;
@@ -15,10 +14,9 @@ import reactor.core.publisher.Mono;
 /**
  * Service class for Subscription entities.
  */
+@Slf4j
 @Service
 public class SubscriptionService {
-    private static final Logger logger = LoggerFactory.getLogger(SubscriptionService.class);
-
     private final SubscriptionRepository subscriptionRepository;
     private final UserManagementService userManagementService;
 
@@ -54,12 +52,12 @@ public class SubscriptionService {
                 .flatMap(tuple -> {
                     User subscriber = tuple.getT1();
                     User producer = tuple.getT2();
-                    logger.info("Attempting to subscribe user {} to producer {}",
+                    log.info("Attempting to subscribe user {} to producer {}",
                             LogSanitizer.sanitize(subscriber.getUsername()),
                             LogSanitizer.sanitize(producer.getUsername()));
                     return subscriptionRepository.findBySubscriberIdAndProducerId(subscriber.getId(), producer.getId())
                             .flatMap(existingSubscription -> {
-                                logger.warn("User {} is already subscribed to {}",
+                                log.warn("User {} is already subscribed to {}",
                                         LogSanitizer.sanitize(subscriber.getUsername()),
                                         LogSanitizer.sanitize(producer.getUsername()));
                                 return Mono.<Subscription>error(
@@ -69,7 +67,7 @@ public class SubscriptionService {
                                 Subscription subscription = new Subscription();
                                 subscription.setSubscriberId(subscriber.getId());
                                 subscription.setProducerId(producer.getId());
-                                logger.info("Creating new subscription for user {} to producer {}",
+                                log.info("Creating new subscription for user {} to producer {}",
                                         LogSanitizer.sanitize(subscriber.getUsername()),
                                         LogSanitizer.sanitize(producer.getUsername()));
                                 return subscriptionRepository.save(subscription);
@@ -90,14 +88,14 @@ public class SubscriptionService {
                 .flatMap(tuple -> {
                     User subscriber = tuple.getT1();
                     User producer = tuple.getT2();
-                    logger.info("Attempting to unsubscribe user {} from producer {}",
+                    log.info("Attempting to unsubscribe user {} from producer {}",
                             LogSanitizer.sanitize(subscriber.getUsername()),
                             LogSanitizer.sanitize(producer.getUsername()));
                     return subscriptionRepository.findBySubscriberIdAndProducerId(subscriber.getId(), producer.getId())
                             .switchIfEmpty(Mono.error(
                                     new IllegalArgumentException("No subscription found for the given users.")))
                             .flatMap(subscription -> {
-                                logger.info("Deleting subscription for user {} from producer {}",
+                                log.info("Deleting subscription for user {} from producer {}",
                                         LogSanitizer.sanitize(subscriber.getUsername()),
                                         LogSanitizer.sanitize(producer.getUsername()));
                                 return subscriptionRepository.delete(subscription);
@@ -109,18 +107,18 @@ public class SubscriptionService {
      * Retrieves subscriptions for a given user.
      *
      * @param jwt JWT of the user whose subscriptions to retrieve
-     * @return Mono containing a Flux of subscriptions for the user
+     * @return Flux of subscriptions for the user
      */
-    public Mono<Flux<Subscription>> getSubscriptionsForUser(JwtClaimAccessor jwt) {
+    public Flux<Subscription> getSubscriptionsForUser(JwtClaimAccessor jwt) {
         return userManagementService.getUserByJwt(jwt)
-                .flatMap(user -> {
+                .flatMapMany(user -> {
                     if (user.getRoles().contains(User.DB_USER_ROLE_SUBSCRIBER_NAME)) {
-                        logger.info("Fetching subscriptions for user: {}", LogSanitizer.sanitize(user.getUsername()));
-                        return Mono.just(subscriptionRepository.findBySubscriberId(user.getId()));
+                        log.info("Fetching subscriptions for user: {}", LogSanitizer.sanitize(user.getUsername()));
+                        return subscriptionRepository.findBySubscriberId(user.getId());
                     } else {
-                        logger.warn("User {} attempted to fetch subscriptions without subscriber role",
+                        log.warn("User {} attempted to fetch subscriptions without subscriber role",
                                 LogSanitizer.sanitize(user.getUsername()));
-                        return Mono.error(new IllegalArgumentException("User is not a subscriber."));
+                        return Flux.error(new IllegalArgumentException("User is not a subscriber."));
                     }
                 });
     }

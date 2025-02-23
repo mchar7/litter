@@ -103,8 +103,8 @@ class MessageServiceTest {
         // mock user with ROLE_PRODUCER
         User producerUser = new User();
         producerUser.setId(TEST_PRODUCER_ID);
-        producerUser.setRoles(List.of(User.DB_USER_ROLE_PRODUCER_NAME));
         producerUser.setUsername(TEST_PRODUCER_USERNAME);
+        producerUser.setRoles(List.of(User.DB_USER_ROLE_PRODUCER_NAME));
         JwtClaimAccessor jwtMock = () -> Map.of("sub", TEST_PRODUCER_USERNAME);
         when(userManagementService.getUserByJwt(jwtMock)).thenReturn(Mono.just(producerUser));
 
@@ -174,6 +174,7 @@ class MessageServiceTest {
         // mock user with producer role
         User producerUser = new User();
         producerUser.setId(TEST_PRODUCER_ID);
+        producerUser.setUsername(TEST_PRODUCER_USERNAME);
         producerUser.setRoles(List.of(User.DB_USER_ROLE_PRODUCER_NAME));
         JwtClaimAccessor jwtMock = () -> Map.of("sub", TEST_PRODUCER_USERNAME);
         when(userManagementService.getUserByJwt(jwtMock)).thenReturn(Mono.just(producerUser));
@@ -210,8 +211,8 @@ class MessageServiceTest {
         // set up user who is producer of message
         User producerUser = new User();
         producerUser.setId(TEST_PRODUCER_ID);
-        producerUser.setRoles(List.of(User.DB_USER_ROLE_PRODUCER_NAME));
         producerUser.setUsername(TEST_PRODUCER_USERNAME);
+        producerUser.setRoles(List.of(User.DB_USER_ROLE_PRODUCER_NAME));
         JwtClaimAccessor jwtMock = () -> Map.of("sub", TEST_PRODUCER_USERNAME);
 
         // set up admin user
@@ -297,8 +298,8 @@ class MessageServiceTest {
         // mock user with producer role
         User producerUser = new User();
         producerUser.setId(TEST_PRODUCER_ID);
-        producerUser.setRoles(List.of(User.DB_USER_ROLE_PRODUCER_NAME));
         producerUser.setUsername(TEST_PRODUCER_USERNAME);
+        producerUser.setRoles(List.of(User.DB_USER_ROLE_PRODUCER_NAME));
         JwtClaimAccessor jwtMock = () -> Map.of("sub", TEST_PRODUCER_USERNAME);
 
         // repository returns empty
@@ -366,47 +367,6 @@ class MessageServiceTest {
     }
 
     /**
-     * Tests retrieving messages for a valid producer username.
-     * <p>
-     * Tests on: getMessagesForProducer(String user)
-     * Expected: Successfully returns a flux of messages
-     */
-    @Test
-    void testGetMessagesForProducer_ValidProducerReturnsMessages() {
-        logger.info("Testing getMessagesForProducer with valid producer...");
-
-        // mock basic producer user
-        User producer = new User();
-        producer.setId(TEST_PRODUCER_ID);
-        producer.setUsername(TEST_PRODUCER_USERNAME);
-
-        // mock 2x messages by producer
-        Message msg1 = new Message();
-        msg1.setMessageId(new ObjectId());
-        msg1.setProducerId(TEST_PRODUCER_ID);
-        msg1.setContent("Producer content #1");
-
-        Message msg2 = new Message();
-        msg2.setMessageId(new ObjectId());
-        msg2.setProducerId(TEST_PRODUCER_ID);
-        msg2.setContent("Producer content #2");
-
-        when(userManagementService.getUserByUsername(TEST_PRODUCER_USERNAME)).thenReturn(Mono.just(producer));
-        when(messageRepository.findByProducerId(TEST_PRODUCER_ID)).thenReturn(Flux.just(msg1, msg2));
-
-        // expect messages to be retrieved
-        StepVerifier.create(messageService.getMessagesForProducer(TEST_PRODUCER_USERNAME))
-                .assertNext(flux -> StepVerifier.create(flux)
-                        .expectNext(msg1)
-                        .expectNext(msg2)
-                        .verifyComplete())
-                .verifyComplete();
-
-        verify(messageRepository).findByProducerId(TEST_PRODUCER_ID);
-        logger.info("getMessagesForProducer test with valid producer user passed.");
-    }
-
-    /**
      * Tests retrieving all messages for a subscriber with ROLE_SUBSCRIBER.
      * <p>
      * Tests on: findAllMessagesForSubscriber(JwtClaimAccessor)
@@ -429,28 +389,26 @@ class MessageServiceTest {
         subscription.setProducerId(TEST_PRODUCER_ID);
 
         // mock 2x messages
-        Message message1 = new Message();
-        message1.setMessageId(new ObjectId());
-        message1.setProducerId(TEST_PRODUCER_ID);
-        message1.setContent("Message 1");
-        message1.setTimestamp(Instant.now());
+        Message msg1 = new Message();
+        msg1.setMessageId(new ObjectId());
+        msg1.setProducerId(TEST_PRODUCER_ID);
+        msg1.setContent("Message 1");
+        msg1.setTimestamp(Instant.now());
 
-        Message message2 = new Message();
-        message2.setMessageId(new ObjectId());
-        message2.setProducerId(TEST_PRODUCER_ID);
-        message2.setContent("Message 2");
-        message2.setTimestamp(Instant.now());
+        Message msg2 = new Message();
+        msg2.setMessageId(new ObjectId());
+        msg2.setProducerId(TEST_PRODUCER_ID);
+        msg2.setContent("Message 2");
+        msg2.setTimestamp(Instant.now());
 
         when(userManagementService.getUserByJwt(jwt)).thenReturn(Mono.just(subscriber));
         when(subscriptionRepository.findBySubscriberId(TEST_SUBSCRIBER_ID)).thenReturn(Flux.just(subscription));
-        when(messageRepository.findByProducerId(TEST_PRODUCER_ID)).thenReturn(Flux.just(message1, message2));
+        when(messageRepository.findByProducerId(TEST_PRODUCER_ID)).thenReturn(Flux.just(msg1, msg2));
 
         // expect messages to be retrieved
         StepVerifier.create(messageService.findAllMessagesForSubscriber(jwt))
-                .assertNext(messages -> {
-                    // verify messages contain the expected content
-                    StepVerifier.create(messages).expectNext(message1).expectNext(message2).verifyComplete();
-                }).verifyComplete();
+                .expectNext(msg1, msg2)
+                .verifyComplete();
 
         // verify interactions
         verify(userManagementService).getUserByJwt(jwt);
@@ -502,25 +460,25 @@ class MessageServiceTest {
         logger.info("Testing getAllMessages...");
 
         // mock messages
-        Message message1 = new Message();
-        message1.setMessageId(new ObjectId());
-        message1.setProducerId(TEST_PRODUCER_ID);
-        message1.setContent("Message 1");
-        message1.setTimestamp(Instant.now());
+        Message msg1 = new Message();
+        msg1.setMessageId(new ObjectId());
+        msg1.setProducerId(TEST_PRODUCER_ID);
+        msg1.setContent("Message 1");
+        msg1.setTimestamp(Instant.now());
 
-        Message message2 = new Message();
-        message2.setMessageId(new ObjectId());
-        message2.setProducerId(TEST_PRODUCER_ID);
-        message2.setContent("Message 2");
-        message2.setTimestamp(Instant.now());
+        Message msg2 = new Message();
+        msg2.setMessageId(new ObjectId());
+        msg2.setProducerId(TEST_PRODUCER_ID);
+        msg2.setContent("Message 2");
+        msg2.setTimestamp(Instant.now());
 
         // mock repository response
-        when(messageRepository.findAll()).thenReturn(Flux.just(message1, message2));
+        when(messageRepository.findAll()).thenReturn(Flux.just(msg1, msg2));
 
         // expect messages to be retrieved
         StepVerifier.create(messageService.getAllMessages())
-                .expectNext(message1)
-                .expectNext(message2)
+                .expectNext(msg1)
+                .expectNext(msg2)
                 .verifyComplete();
 
         // verify interactions
@@ -544,28 +502,25 @@ class MessageServiceTest {
         producer.setUsername(TEST_PRODUCER_USERNAME);
 
         // mock messages
-        Message message1 = new Message();
-        message1.setMessageId(new ObjectId());
-        message1.setProducerId(TEST_PRODUCER_ID);
-        message1.setContent("Message 1");
-        message1.setTimestamp(Instant.now());
+        Message msg1 = new Message();
+        msg1.setMessageId(new ObjectId());
+        msg1.setProducerId(TEST_PRODUCER_ID);
+        msg1.setContent("Message 1");
+        msg1.setTimestamp(Instant.now());
 
-        Message message2 = new Message();
-        message2.setMessageId(new ObjectId());
-        message2.setProducerId(TEST_PRODUCER_ID);
-        message2.setContent("Message 2");
-        message2.setTimestamp(Instant.now());
+        Message msg2 = new Message();
+        msg2.setMessageId(new ObjectId());
+        msg2.setProducerId(TEST_PRODUCER_ID);
+        msg2.setContent("Message 2");
+        msg2.setTimestamp(Instant.now());
 
         // mock user retrieval by username and message retrieval by producer ID
         when(userManagementService.getUserByUsername(TEST_PRODUCER_USERNAME)).thenReturn(Mono.just(producer));
-        when(messageRepository.findByProducerId(TEST_PRODUCER_ID)).thenReturn(Flux.just(message1, message2));
+        when(messageRepository.findByProducerId(TEST_PRODUCER_ID)).thenReturn(Flux.just(msg1, msg2));
 
         // expect messages to be retrieved
         StepVerifier.create(messageService.getMessagesForProducer(TEST_PRODUCER_USERNAME))
-                .assertNext(messages -> StepVerifier.create(messages)
-                        .expectNext(message1)
-                        .expectNext(message2)
-                        .verifyComplete())
+                .expectNext(msg1, msg2)
                 .verifyComplete();
 
         // verify interactions

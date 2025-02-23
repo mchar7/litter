@@ -1,12 +1,11 @@
 package org.ac.cst8277.chard.matt.litter.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.ac.cst8277.chard.matt.litter.model.Message;
 import org.ac.cst8277.chard.matt.litter.model.User;
 import org.ac.cst8277.chard.matt.litter.repository.MessageRepository;
 import org.ac.cst8277.chard.matt.litter.repository.SubscriptionRepository;
 import org.ac.cst8277.chard.matt.litter.security.LogSanitizer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.oauth2.jwt.JwtClaimAccessor;
 import org.springframework.stereotype.Service;
@@ -18,10 +17,9 @@ import java.time.Instant;
 /**
  * Service class for Message objects.
  */
+@Slf4j
 @Service
 public class MessageService {
-    private static final Logger logger = LoggerFactory.getLogger(MessageService.class);
-
     private final MessageRepository messageRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final UserManagementService userManagementService;
@@ -53,14 +51,14 @@ public class MessageService {
      */
     public Mono<Message> createMessage(JwtClaimAccessor jwt, String content) {
         if (null == content || content.isEmpty()) {
-            logger.warn("User attempted to create a message with empty content");
+            log.warn("User attempted to create a message with empty content");
             return Mono.error(new IllegalArgumentException("Message content cannot be empty."));
         }
 
         return userManagementService.getUserByJwt(jwt)
                 .flatMap(user -> {
                     if (!user.getRoles().contains(User.DB_USER_ROLE_PRODUCER_NAME)) {
-                        logger.warn("User {} attempted to create a message without producer role",
+                        log.warn("User {} attempted to create a message without producer role",
                                 LogSanitizer.sanitize(user.getUsername()));
                         return Mono.error(new IllegalArgumentException("User does not have producer privileges."));
                     }
@@ -68,11 +66,11 @@ public class MessageService {
                     message.setContent(content);
                     message.setProducerId(user.getId());
                     message.setTimestamp(Instant.now());
-                    logger.info("Creating message for user: {}", LogSanitizer.sanitize(user.getUsername()));
+                    log.info("Creating message for user: {}", LogSanitizer.sanitize(user.getUsername()));
                     return messageRepository.save(message);
                 })
                 .doOnSuccess(message ->
-                        logger.info("Message created successfully with id: {}", message.getMessageId()));
+                        log.info("Message created successfully with id: {}", message.getMessageId()));
     }
 
     /**
@@ -83,7 +81,7 @@ public class MessageService {
      * @return Mono indicating the result of the delete operation
      */
     public Mono<Void> deleteMessage(String id, JwtClaimAccessor jwt) {
-        logger.info("Attempting to delete message with id: {}", LogSanitizer.sanitize(id));
+        log.info("Attempting to delete message with id: {}", LogSanitizer.sanitize(id));
         return userManagementService.getUserByJwt(jwt)
                 .flatMap(user -> messageRepository.findById(id)
                         .switchIfEmpty(Mono.error(new IllegalArgumentException("Message not found.")))
@@ -95,7 +93,7 @@ public class MessageService {
                                         new IllegalArgumentException("User is not authorized to delete this message."));
                             }
 
-                            logger.info("User {} deleted message with id: {}",
+                            log.info("User {} deleted message with id: {}",
                                     LogSanitizer.sanitize(user.getUsername()), LogSanitizer.sanitize(id));
                             return messageRepository.deleteById(id);
                         })
@@ -109,10 +107,10 @@ public class MessageService {
      * @return Mono of the message if found
      */
     public Mono<Message> getMessageById(String id) {
-        logger.info("Fetching message with id: {}", LogSanitizer.sanitize(id));
+        log.info("Fetching message with id: {}", LogSanitizer.sanitize(id));
         return messageRepository.findById(id)
                 .doOnSuccess(message ->
-                        logger.info("Retrieved message with id: {}", LogSanitizer.sanitize(id)))
+                        log.info("Retrieved message with id: {}", LogSanitizer.sanitize(id)))
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Message not found.")));
     }
 
@@ -120,34 +118,35 @@ public class MessageService {
      * Retrieves messages for a given producer.
      *
      * @param producerUsername The username of the producer
-     * @return Mono containing a Flux of messages or an empty Flux if no messages are found
+     * @return Flux of messages produced by the given producer
      */
-    public Mono<Flux<Message>> getMessagesForProducer(String producerUsername) {
-        logger.info("Fetching messages for producer: {}", LogSanitizer.sanitize(producerUsername));
+    public Flux<Message> getMessagesForProducer(String producerUsername) {
+        log.info("Fetching messages for producer: {}", LogSanitizer.sanitize(producerUsername));
         return userManagementService.getUserByUsername(producerUsername)
-                .map(producer -> messageRepository.findByProducerId(producer.getId()))
-                .doOnSuccess(messages ->
-                        logger.info("Retrieved messages for producer: {}", LogSanitizer.sanitize(producerUsername)));
+                .flatMapMany(producer -> messageRepository.findByProducerId(producer.getId()))
+                .doOnComplete(() -> log.info("Retrieved messages for producer: {}",
+                        LogSanitizer.sanitize(producerUsername)));
     }
 
     /**
      * Finds all messages for a given subscriber.
      *
      * @param jwt JWT of the subscriber
-     * @return Mono containing a Flux of Message objects for the subscriber
+     * @return Flux of Message objects for the subscriber
      */
-    public Mono<Flux<Message>> findAllMessagesForSubscriber(JwtClaimAccessor jwt) {
+    public Flux<Message> findAllMessagesForSubscriber(JwtClaimAccessor jwt) {
         return userManagementService.getUserByJwt(jwt)
-                .flatMap(subscriber -> {
+                .flatMapMany(subscriber -> {
                     if (!subscriber.getRoles().contains(User.DB_USER_ROLE_SUBSCRIBER_NAME)) {
-                        return Mono.error(new IllegalArgumentException("User is not a subscriber."));
+                        return Flux.error(new IllegalArgumentException("User is not a subscriber."));
                     }
-                    logger.info("Fetching messages for subscriber: {}", LogSanitizer.sanitize(subscriber.getUsername()));
-                    return Mono.just(subscriptionRepository.findBySubscriberId(subscriber.getId())
-                            .flatMap(subscription -> messageRepository.findByProducerId(subscription.getProducerId())));
+                    log.info("Fetching messages for subscriber: {}", LogSanitizer.sanitize(subscriber.getUsername()));
+                    return subscriptionRepository.findBySubscriberId(subscriber.getId())
+                            .flatMap(subscription -> messageRepository.findByProducerId(subscription.getProducerId()));
                 })
-                .doOnSuccess(messages -> logger.info("Retrieved messages for subscriber"));
+                .doOnComplete(() -> log.info("Retrieved messages for subscriber"));
     }
+
 
     /**
      * Method for getting all messages.
@@ -155,8 +154,8 @@ public class MessageService {
      * @return Flux of all messages
      */
     public Flux<Message> getAllMessages() {
-        logger.info("Fetching all messages");
+        log.info("Fetching all messages");
         return messageRepository.findAll()
-                .doOnComplete(() -> logger.info("Finished fetching all messages"));
+                .doOnComplete(() -> log.info("Finished fetching all messages"));
     }
 }

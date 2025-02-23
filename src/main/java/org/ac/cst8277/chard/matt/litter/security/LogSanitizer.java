@@ -1,16 +1,15 @@
 package org.ac.cst8277.chard.matt.litter.security;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.regex.Pattern;
 
 /**
  * Utility class to sanitize user input before logging to prevent log injection.
  */
+@Slf4j
 public enum LogSanitizer {
     ;
-    private static final Logger LOGGER = LoggerFactory.getLogger(LogSanitizer.class);
     private static final String SANITIZED_REPLACEMENT = "REDACTED_BY_SANITIZER";
     private static final Pattern sanitizePattern = Pattern.compile("[^a-zA-Z0-9]");
 
@@ -22,11 +21,10 @@ public enum LogSanitizer {
      */
     public static String sanitize(CharSequence input) {
         if (null == input) {
-            LOGGER.debug("sanitize() received null input, returning empty string.");
+            log.debug("Input was null; returning empty string.");
             return "";
         }
-        String sanitized = sanitizePattern.matcher(input).replaceAll(SANITIZED_REPLACEMENT);
-        LOGGER.debug("Input was sanitized to prevent possible log injection.");
-        return sanitized;
+        log.debug("Input was sanitized to prevent possible log injection.");
+        return sanitizePattern.matcher(input).replaceAll(SANITIZED_REPLACEMENT);
     }
 }
