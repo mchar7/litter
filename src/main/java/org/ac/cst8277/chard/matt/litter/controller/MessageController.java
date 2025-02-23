@@ -53,7 +53,7 @@ public class MessageController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Message.class)))
     @ApiResponse(responseCode = "400", description = "Invalid message content", content = @Content)
     @ApiResponse(responseCode = "403", description = "User is not authorized to create message", content = @Content)
-    @PostMapping({"", "/"})
+    @PostMapping("")
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<Message> createMessage(
             @AuthenticationPrincipal Jwt jwt,
@@ -77,7 +77,7 @@ public class MessageController {
     @ApiResponse(responseCode = "204", description = "Message deleted successfully", content = @Content)
     @ApiResponse(responseCode = "400", description = "Invalid message ID", content = @Content)
     @ApiResponse(responseCode = "403", description = "User not authorized to delete the message", content = @Content)
-    @DeleteMapping({"/{id}", "/{id}/"})
+    @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public Mono<Void> deleteMessage(
             @Parameter(description = "ID of the message to delete", required = true)
@@ -103,7 +103,7 @@ public class MessageController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Message.class)))
     @ApiResponse(responseCode = "400", description = "Invalid message ID", content = @Content)
     @ApiResponse(responseCode = "404", description = "Message not found", content = @Content)
-    @GetMapping({"/{id}", "/{id}/"})
+    @GetMapping("/{id}")
     public Mono<Message> getMessage(
             @Parameter(description = "ID of the message to retrieve", required = true)
             @PathVariable String id) {
@@ -125,7 +125,7 @@ public class MessageController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Message.class)))
     @ApiResponse(responseCode = "400", description = "Invalid producer username", content = @Content)
     @ApiResponse(responseCode = "404", description = "Producer not found or no messages", content = @Content)
-    @GetMapping({"/producer/{producerUsername}", "/producer/{producerUsername}/"})
+    @GetMapping("/producer/{producerUsername}")
     public Flux<Message> getMessagesForProducer(
             @Parameter(description = "Username of the producer", required = true)
             @PathVariable String producerUsername) {
@@ -149,7 +149,7 @@ public class MessageController {
     @ApiResponse(responseCode = "200", description = "Messages retrieved for subscriber",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Message.class)))
     @ApiResponse(responseCode = "204", description = "No messages found", content = @Content)
-    @GetMapping({"/subscribed", "/subscribed/"})
+    @GetMapping("/subscribed")
     public Flux<Message> getAllMessagesForSubscriber(@AuthenticationPrincipal Jwt jwt) {
         return messageService.findAllMessagesForSubscriber(jwt)
                 .doFirst(() -> log.info("Retrieving subscribed messages for user {}", LogSanitizer.sanitize(jwt.getSubject())))
@@ -167,7 +167,7 @@ public class MessageController {
     @Operation(summary = "Get all messages", description = "Retrieves all messages in the system")
     @ApiResponse(responseCode = "200", description = "All messages retrieved successfully",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Message.class)))
-    @GetMapping({"/all", "/all/"})
+    @GetMapping("/all")
     public Flux<Message> getAllMessages() {
         return messageService.getAllMessages()
                 .doFirst(() -> log.info("Retrieving all messages"))

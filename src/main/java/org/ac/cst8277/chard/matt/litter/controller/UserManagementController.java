@@ -49,7 +49,7 @@ public class UserManagementController {
     @ApiResponse(responseCode = "201", description = "User created successfully",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = User.class)))
     @ApiResponse(responseCode = "400", description = "Invalid input or user already exists", content = @Content)
-    @PostMapping({"/register", "/register/"})
+    @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<User> register(@RequestBody Map<String, String> registerInfo) {
         String username = registerInfo.get(USERNAME_KEY);
@@ -73,7 +73,7 @@ public class UserManagementController {
             content = @Content(mediaType = "text/plain", schema = @Schema(type = "string")))
     @ApiResponse(responseCode = "400", description = "Invalid input", content = @Content)
     @ApiResponse(responseCode = "401", description = "Unauthorized, invalid credentials", content = @Content)
-    @PostMapping({"/login", "/login/"})
+    @PostMapping("/login")
     public Mono<String> login(@RequestBody Map<String, String> loginInfo) {
         String username = loginInfo.get(USERNAME_KEY);
         String password = loginInfo.get(PASSWORD_KEY);
@@ -93,7 +93,7 @@ public class UserManagementController {
     @Operation(summary = "Get all users", description = "Retrieves a list of all registered users")
     @ApiResponse(responseCode = "200", description = "List of users retrieved successfully",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class)))
-    @GetMapping({"/all", "/all/"})
+    @GetMapping("/all")
     public Flux<Map<String, Object>> getAllUsers() {
         return userManagementService.getAllUsers()
                 .doFirst(() -> log.info("Retrieving all users"))
@@ -109,7 +109,7 @@ public class UserManagementController {
     @Operation(summary = "Get all producers", description = "Retrieves a list of all users with the producer role")
     @ApiResponse(responseCode = "200", description = "List of producers retrieved successfully",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = User.class)))
-    @GetMapping({"/producers", "/producers/"})
+    @GetMapping("/producers")
     public Flux<User> getAllProducers() {
         return userManagementService.getAllUsersByRole(User.DB_USER_ROLE_PRODUCER_NAME)
                 .doFirst(() -> log.info("Retrieving all producers"))

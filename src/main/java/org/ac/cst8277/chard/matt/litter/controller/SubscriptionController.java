@@ -50,7 +50,7 @@ public class SubscriptionController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Subscription.class)))
     @ApiResponse(responseCode = "400", description = "Invalid producer username", content = @Content)
     @ApiResponse(responseCode = "409", description = "Already subscribed to this producer", content = @Content)
-    @PutMapping({"{producerUsername}", "/{producerUsername}/"})
+    @PutMapping("{producerUsername}")
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<Subscription> createSubscription(
             @AuthenticationPrincipal Jwt jwt,
@@ -80,7 +80,7 @@ public class SubscriptionController {
     @ApiResponse(responseCode = "204", description = "Subscription deleted successfully", content = @Content)
     @ApiResponse(responseCode = "400", description = "Invalid producer username", content = @Content)
     @ApiResponse(responseCode = "404", description = "Subscription not found", content = @Content)
-    @DeleteMapping({"{producerUsername}", "{producerUsername}/"})
+    @DeleteMapping("{producerUsername}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public Mono<Void> deleteSubscription(
             @AuthenticationPrincipal Jwt jwt,
@@ -109,7 +109,7 @@ public class SubscriptionController {
     @ApiResponse(responseCode = "200", description = "Subscriptions retrieved successfully",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Subscription.class)))
     @ApiResponse(responseCode = "404", description = "No subscriptions found or user not a subscriber", content = @Content)
-    @GetMapping({"", "/"})
+    @GetMapping("")
     public Flux<Subscription> getSubscriptions(@AuthenticationPrincipal Jwt jwt) {
         return subscriptionService.getSubscriptionsForUser(jwt)
                 .doFirst(() -> log.info("Retrieving subscriptions for user {}", LogSanitizer.sanitize(jwt.getSubject())))
