@@ -31,6 +31,8 @@ class WebSecurityConfig {
             "/user/login",
             "/user/register",
             "/actuator/health",
+            "/swagger-ui/**",
+            "/v3/**"
     };
 
     private static final String[] AUTH_ADMIN_ONLY = {
