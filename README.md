@@ -1,5 +1,5 @@
 ![Litter Banner](res/img/litter_banner_2880x754.webp)
-[![Site Status](https://img.shields.io/website?url=https%3A%2F%2Fprod.litter.dev/v3/api-docs&down_message=offline&up_message=online&label=%E2%8F%BB%20site%20status&style=for-the-badge)](https://prod.litter.dev/v3/swagger-ui/index.html)
+[![Site Status](https://img.shields.io/website?url=https%3A%2F%2Fprod.litter.dev/v3/api-docs&down_message=offline&up_message=online&label=%E2%8F%BB%20site%20status&style=for-the-badge)](https://prod.litter.dev/swagger-ui/index.html)
 ![CI/CD](https://img.shields.io/github/actions/workflow/status/mchar7/litter/ci_build-test-push.yml?branch=main&style=for-the-badge&logo=github&label=CI/CD)
 ![K8S](https://img.shields.io/badge/K8S-Azure%20AKS-blue?style=for-the-badge&logo=kubernetes)
 ![License](https://img.shields.io/badge/License-GPL%20v3-blue?style=for-the-badge&logo=gnu)
