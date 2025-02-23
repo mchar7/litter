@@ -105,11 +105,8 @@ public class MessageController {
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public Mono<Void> deleteMessage(
-            @Parameter(
-                    description = "ID of the message to delete",
-                    required = true,
-                    example = "606c76a7e3a4e17abc321654"
-            ) @PathVariable String id,
+            @Parameter(description = "ID of the message to delete", required = true, example = "606c76a7e3a4e17abc321654")
+            @PathVariable String id,
             @Parameter(description = "JWT token representing the authenticated user")
             @AuthenticationPrincipal Jwt jwt) {
         return messageService.deleteMessage(id, jwt)
@@ -129,7 +126,7 @@ public class MessageController {
      */
     @Operation(
             summary = "Get a message by ID",
-            description = "Retrieves a message by its unique identifier.",
+            description = "Retrieves a message by its unique ID.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Message retrieved successfully",
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Message.class))),
@@ -139,11 +136,8 @@ public class MessageController {
     )
     @GetMapping("/{id}")
     public Mono<Message> getMessage(
-            @Parameter(
-                    description = "ID of the message to retrieve",
-                    required = true,
-                    example = "606c76a7e3a4e17abc321654"
-            ) @PathVariable String id) {
+            @Parameter(description = "ID of the message to retrieve", required = true, example = "606c76a7e3a4e17abc321654")
+            @PathVariable String id) {
         return messageService.getMessageById(id)
                 .doFirst(() -> log.info("Retrieving message {}", LogSanitizer.sanitize(id)))
                 .doOnSuccess(message -> log.info("Retrieved message {}", message.getMessageId()))
@@ -159,11 +153,15 @@ public class MessageController {
      */
     @Operation(
             summary = "Get messages for a producer",
-            description = "Retrieves all messages posted by the specified producer. " +
-                    "Provide the producer's username (e.g., \"producer1\").",
+            description = "Retrieves all messages posted by the specified producer. Provide the producer's username (e.g., \"producer1\").",
             responses = {
-                    @ApiResponse(responseCode = "200", description = "Messages retrieved for producer",
-                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Message.class))),
+                    @ApiResponse(
+                            responseCode = "200", description = "Messages retrieved for producer",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    schema = @Schema(type = "array", implementation = Message.class)
+                            )
+                    ),
                     @ApiResponse(responseCode = "400", description = "Invalid producer username"),
                     @ApiResponse(responseCode = "404", description = "Producer not found or no messages")
             }
@@ -191,11 +189,12 @@ public class MessageController {
      */
     @Operation(
             summary = "Get messages for subscriber",
-            description = "Retrieves all messages for the authenticated subscriber based on their subscriptions. " +
-                    "Requires a valid JWT Bearer token.",
+            description = "Retrieves all messages for the authenticated subscriber based on their subscriptions. Requires a valid JWT Bearer token.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Messages retrieved for subscriber",
-                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Message.class))),
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    schema = @Schema(type = "array", implementation = Message.class))),
                     @ApiResponse(responseCode = "204", description = "No messages found")
             }
     )
@@ -217,11 +216,10 @@ public class MessageController {
      *
      * @return Flux of all messages
      */
-    @Operation(
-            summary = "Get all messages",
-            description = "Retrieves all messages in the system.",
-            responses = @ApiResponse(responseCode = "200", description = "All messages retrieved successfully",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = Message.class))))
+    @Operation(summary = "Get all messages", description = "Retrieves all messages in the system.",
+            responses = @ApiResponse(
+                    responseCode = "200", description = "All messages retrieved successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(type = "array", implementation = Message.class))))
     @GetMapping("/all")
     public Flux<Message> getAllMessages() {
         return messageService.getAllMessages()

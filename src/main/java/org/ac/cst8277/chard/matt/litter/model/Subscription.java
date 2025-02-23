@@ -2,6 +2,7 @@ package org.ac.cst8277.chard.matt.litter.model;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.Setter;
 import org.bson.types.ObjectId;
@@ -18,11 +19,25 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @Document(collection = "subscriptions")
 @SuppressWarnings("ClassWithoutLogger")
 public class Subscription {
-    @Id                                                 // mark messageId as primary key
-    @JsonSerialize(using = ToStringSerializer.class)    // serialize ObjectId as a string in JSON
-    private ObjectId subscriptionId;                    // ID of the subscription
-    @JsonSerialize(using = ToStringSerializer.class)    // serialize ObjectId as a string in JSON
-    private ObjectId subscriberId;                      // ID of the user who is subscribed to the producer
-    @JsonSerialize(using = ToStringSerializer.class)    // serialize ObjectId as a string in JSON
-    private ObjectId producerId;                        // ID of the user to whom the subscriber is subscribed
+    /**
+     * Unique ID for the subscription.
+     */
+    @Id
+    @JsonSerialize(using = ToStringSerializer.class)
+    @Schema(description = "Unique ID for the subscription", accessMode = Schema.AccessMode.READ_ONLY)
+    private ObjectId subscriptionId;
+
+    /**
+     * Unique ID of the subscriber.
+     */
+    @JsonSerialize(using = ToStringSerializer.class)
+    @Schema(description = "Unique ID of the subscriber", accessMode = Schema.AccessMode.READ_ONLY)
+    private ObjectId subscriberId;
+
+    /**
+     * Unique ID of the producer.
+     */
+    @JsonSerialize(using = ToStringSerializer.class)
+    @Schema(description = "Unique ID of the producer to whom the user is subscribed", accessMode = Schema.AccessMode.READ_ONLY)
+    private ObjectId producerId;
 }

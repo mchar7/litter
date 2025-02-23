@@ -21,7 +21,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Unit test class for UserManagementService.
@@ -574,19 +575,14 @@ class UserManagementServiceTest {
         // repository returns two users
         Mockito.when(userRepository.findAll()).thenReturn(Flux.just(userA, userB));
 
-        // verify flux of mapped user data
+        // verify flux of users is returned
         StepVerifier.create(userManagementService.getAllUsers())
-                .assertNext(map -> {
-                    // confirm userA is present in map
-                    assertTrue(map.containsValue(userA.getUsername()), "Should contain user A username");
-                    assertTrue(map.containsValue(userA.getRoles()), "Should contain user A roles");
-                })
-                .assertNext(map -> {
-                    // confirm userB is present in map
-                    assertTrue(map.containsValue(userB.getUsername()), "Should contain user B username");
-                    assertTrue(map.containsValue(userB.getRoles()), "Should contain user B roles");
-                })
+                .expectNext(userA)
+                .expectNext(userB)
                 .verifyComplete();
+
+        // verify that the repository was queried once
+        Mockito.verify(userRepository, Mockito.times(1)).findAll();
         logger.info("Test for getAllUsers completed.");
     }
 }

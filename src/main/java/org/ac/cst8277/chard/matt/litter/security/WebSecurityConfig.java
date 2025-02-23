@@ -54,9 +54,7 @@ class WebSecurityConfig {
         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
         exchange.getResponse().getHeaders().setContentType(MediaType.TEXT_PLAIN);
 
-        String simpleErrMsg = err.getMessage().contains(":")
-                ? err.getMessage().split(":")[0]
-                : "Unauthorized";
+        String simpleErrMsg = err.getMessage().contains(":") ? err.getMessage().split(":")[0] : "Unauthorized";
 
         return exchange.getResponse().writeWith(
                 Mono.just(exchange.getResponse().bufferFactory().wrap(simpleErrMsg.getBytes(StandardCharsets.UTF_8)))
@@ -91,10 +89,7 @@ class WebSecurityConfig {
      * @return SecurityWebFilterChain object
      */
     @Bean
-    protected SecurityWebFilterChain filterChain(
-            ServerHttpSecurity http,
-            JwtAuthenticationConverter jwtAuthConverter
-    ) {
+    protected SecurityWebFilterChain filterChain(ServerHttpSecurity http, JwtAuthenticationConverter jwtAuthConverter) {
         log.info("Configuring security filter chain");
         return http
                 .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())

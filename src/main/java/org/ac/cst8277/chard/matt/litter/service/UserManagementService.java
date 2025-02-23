@@ -13,12 +13,8 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Pattern;
-
-import static org.ac.cst8277.chard.matt.litter.model.User.ROLES_HASHMAP_DEFAULT_CAP;
 
 /**
  * Service class for User objects.
@@ -30,11 +26,6 @@ public class UserManagementService {
             Invalid username. \
             Username must be at least 3 characters long \
             and contain only alphanumeric characters.""";
-
-    // field names as stored in the database
-    private static final String FIELD_ID = "id";
-    private static final String FIELD_ROLES = "roles";
-    private static final String FIELD_USERNAME = "username";
 
     // messages for exceptions
     private static final String INVALID_CREDENTIALS_MESSAGE = "Invalid credentials";
@@ -206,15 +197,8 @@ public class UserManagementService {
      *
      * @return Flux of all users
      */
-    public Flux<Map<String, Object>> getAllUsers() {
+    public Flux<User> getAllUsers() {
         log.info("Fetching all users");
-        return userRepository.findAll()
-                .map(user -> {
-                    Map<String, Object> userMap = HashMap.newHashMap(ROLES_HASHMAP_DEFAULT_CAP);
-                    userMap.put(FIELD_ID, user.getId().toString());
-                    userMap.put(FIELD_USERNAME, user.getUsername());
-                    userMap.put(FIELD_ROLES, user.getRoles());
-                    return userMap;
-                });
+        return userRepository.findAll();
     }
 }
