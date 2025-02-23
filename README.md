@@ -1,11 +1,11 @@
 ![Litter Banner](res/img/litter_banner_2880x754.webp)
-![Site Status](https://img.shields.io/website?url=https%3A%2F%2Fprod.litter.dev/v3/api-docs&down_color=red&down_message=offline&up_color=green&up_message=online&label=%E2%8F%BB%20site%20status&style=for-the-badge)
+[![Site Status](https://img.shields.io/website?url=https%3A%2F%2Fprod.litter.dev/v3/api-docs&down_message=offline&up_message=online&label=%E2%8F%BB%20site%20status&style=for-the-badge)](https://prod.litter.dev/v3/swagger-ui/index.html)
 ![CI/CD](https://img.shields.io/github/actions/workflow/status/mchar7/litter/ci_build-test-push.yml?branch=main&style=for-the-badge&logo=github&label=CI/CD)
+![K8S](https://img.shields.io/badge/K8S-Azure%20AKS-blue?style=for-the-badge&logo=kubernetes)
+![License](https://img.shields.io/badge/License-GPL%20v3-blue?style=for-the-badge&logo=gnu)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.1-6DB33F?style=for-the-badge&logo=spring-boot)
 ![Java](https://img.shields.io/badge/Java-Corretto%2021-orange?style=for-the-badge&logo=openjdk)
 ![MongoDB](https://img.shields.io/badge/MongoDB-8.0-green?style=for-the-badge&logo=mongodb)
-![K8S](https://img.shields.io/badge/K8S-Azure%20AKS-blue?style=for-the-badge&logo=kubernetes)
-![License](https://img.shields.io/badge/License-GPL%20v3-blue?style=for-the-badge&logo=gnu)
 
 Litter is a (backend-only for now) API for a Twitter-like social media site. Built with Spring Boot, MongoDB, and enough
 cloud infrastructure to make me cry when I get my monthly Azure bill.
