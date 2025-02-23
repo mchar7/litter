@@ -256,8 +256,8 @@ jobs:
         id: create-deployment
         with:
           token: ${{ github.token }}
-          environment: ${{ needs.prepare-deployment.outputs.env_name }}
-          environment-url: ${{ needs.prepare-deployment.outputs.env_url }}
+          environment: ${{ steps.determine-env.outputs.env_name }}
+          environment-url: ${{ steps.determine-env.outputs.env_url }}
           ref: ${{ github.event.workflow_run.pull_requests[0].head.sha }}
 
   deploy-to-aks:
