@@ -34,7 +34,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb-reactive'
 
     // SpringDoc OpenAPI doc generator for reactive WebFlux; this will generate and serve Swagger UI
-    implementation 'org.springdoc:springdoc-openapi-webflux-ui:1.8.0'
+    implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.8.5'
 
     // Lombok
     compileOnly 'org.projectlombok:lombok'
