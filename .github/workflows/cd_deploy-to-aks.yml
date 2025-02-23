@@ -369,4 +369,5 @@ jobs:
           token: '${{ github.token }}'
           state: ${{ needs.deploy-to-aks.result }}
           deployment-id: ${{ needs.prepare-deployment.outputs.deployment_id }}
+          environment: ${{ needs.prepare-deployment.outputs.env_name }}
           environment-url: ${{ needs.prepare-deployment.outputs.env_url }}
