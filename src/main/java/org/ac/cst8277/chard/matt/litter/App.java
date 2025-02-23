@@ -26,13 +26,11 @@ import org.springframework.data.mongodb.repository.config.EnableReactiveMongoRep
 @OpenAPIDefinition(
         info = @Info(
                 title = "Litter API",
-                version = "0.0.1-SNAPSHOT",
-                description = "Spring Boot API for Litter (a minimalist Twitter clone)"
+                version = "1",
+                description = "Spring Boot API for Litter. For more details, see https://github.com/mchar7/litter"
         ),
         servers = {
                 @Server(url = "http://localhost:8080", description = "Local server"),
-                @Server(url = "https://dev.litter.dev", description = "Development server"),
-                @Server(url = "https://staging.litter.dev", description = "Staging server"),
                 @Server(url = "https://prod.litter.dev", description = "Production server")
         }
 )
