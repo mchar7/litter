@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.ac.cst8277.chard.matt.litter.model.Subscription;
@@ -41,21 +42,33 @@ public class SubscriptionController {
     /**
      * Creates a new subscription to a producer.
      *
-     * @param jwt              Jwt used by the authenticated user, resolved by Spring Security
-     * @param producerUsername username of the producer to subscribe to
+     * @param jwt              JWT representing the authenticated user (provided in the Authorization header)
+     * @param producerUsername Username of the producer to subscribe to
      * @return Mono of the created subscription
      */
-    @Operation(summary = "Create Subscription", description = "Subscribes the authenticated user to the specified producer")
-    @ApiResponse(responseCode = "201", description = "Subscription created successfully",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Subscription.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid producer username", content = @Content)
-    @ApiResponse(responseCode = "409", description = "Already subscribed to this producer", content = @Content)
+    @Operation(
+            summary = "Create Subscription",
+            description = "Subscribes the authenticated user to the specified producer. " +
+                    "The path parameter must be a valid producer username. " +
+                    "Requires a valid JWT Bearer token.",
+            responses = {
+                    @ApiResponse(responseCode = "201", description = "Subscription created successfully",
+                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Subscription.class))),
+                    @ApiResponse(responseCode = "400", description = "Invalid producer username"),
+                    @ApiResponse(responseCode = "409", description = "Already subscribed to this producer")
+            }
+    )
+    @SecurityRequirement(name = "bearerAuth")
     @PutMapping("{producerUsername}")
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<Subscription> createSubscription(
+            @Parameter(description = "JWT token representing the authenticated user")
             @AuthenticationPrincipal Jwt jwt,
-            @Parameter(description = "Username of the producer to subscribe to", required = true)
-            @PathVariable String producerUsername) {
+            @Parameter(
+                    description = "Username of the producer to subscribe to",
+                    required = true,
+                    example = "producer1"
+            ) @PathVariable String producerUsername) {
         return subscriptionService.subscribe(jwt, producerUsername)
                 .doFirst(() -> log.info("User {} attempting to subscribe to producer {}",
                         LogSanitizer.sanitize(jwt.getSubject()),
@@ -72,20 +85,31 @@ public class SubscriptionController {
     /**
      * Deletes a subscription to a producer.
      *
-     * @param jwt              Jwt used by the authenticated user, resolved by Spring Security
-     * @param producerUsername username of the producer to unsubscribe from
-     * @return Mono of completion
+     * @param jwt              JWT representing the authenticated user (provided in the Authorization header)
+     * @param producerUsername Username of the producer to unsubscribe from
+     * @return Mono signaling completion
      */
-    @Operation(summary = "Delete Subscription", description = "Deletes the subscription for the authenticated user from the specified producer")
-    @ApiResponse(responseCode = "204", description = "Subscription deleted successfully", content = @Content)
-    @ApiResponse(responseCode = "400", description = "Invalid producer username", content = @Content)
-    @ApiResponse(responseCode = "404", description = "Subscription not found", content = @Content)
+    @Operation(
+            summary = "Delete Subscription",
+            description = "Deletes the subscription for the authenticated user from the specified producer. " +
+                    "Requires a valid JWT Bearer token.",
+            responses = {
+                    @ApiResponse(responseCode = "204", description = "Subscription deleted successfully"),
+                    @ApiResponse(responseCode = "400", description = "Invalid producer username"),
+                    @ApiResponse(responseCode = "404", description = "Subscription not found")
+            }
+    )
+    @SecurityRequirement(name = "bearerAuth")
     @DeleteMapping("{producerUsername}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public Mono<Void> deleteSubscription(
+            @Parameter(description = "JWT token representing the authenticated user")
             @AuthenticationPrincipal Jwt jwt,
-            @Parameter(description = "Username of the producer to unsubscribe from", required = true)
-            @PathVariable String producerUsername) {
+            @Parameter(
+                    description = "Username of the producer to unsubscribe from",
+                    required = true,
+                    example = "producer1"
+            ) @PathVariable String producerUsername) {
         return subscriptionService.unsubscribe(jwt, producerUsername)
                 .doFirst(() -> log.info("User {} attempting to unsubscribe from producer {}",
                         LogSanitizer.sanitize(jwt.getSubject()),
@@ -100,17 +124,26 @@ public class SubscriptionController {
     }
 
     /**
-     * Retrieves all subscriptions for the authenticated user.
+     * Retrieves all subscriptions for the authenticated subscriber.
      *
-     * @param jwt Jwt used by the authenticated user, resolved by Spring Security
+     * @param jwt JWT representing the authenticated user (provided in the Authorization header)
      * @return Flux of subscriptions for the user
      */
-    @Operation(summary = "Get Subscriptions", description = "Retrieves all subscriptions for the authenticated subscriber")
-    @ApiResponse(responseCode = "200", description = "Subscriptions retrieved successfully",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Subscription.class)))
-    @ApiResponse(responseCode = "404", description = "No subscriptions found or user not a subscriber", content = @Content)
+    @Operation(
+            summary = "Get Subscriptions",
+            description = "Retrieves all subscriptions for the authenticated subscriber. " +
+                    "Requires a valid JWT Bearer token.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Subscriptions retrieved successfully",
+                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Subscription.class))),
+                    @ApiResponse(responseCode = "404", description = "No subscriptions found or user not a subscriber")
+            }
+    )
+    @SecurityRequirement(name = "bearerAuth")
     @GetMapping("")
-    public Flux<Subscription> getSubscriptions(@AuthenticationPrincipal Jwt jwt) {
+    public Flux<Subscription> getSubscriptions(
+            @Parameter(description = "JWT token representing the authenticated user")
+            @AuthenticationPrincipal Jwt jwt) {
         return subscriptionService.getSubscriptionsForUser(jwt)
                 .doFirst(() -> log.info("Retrieving subscriptions for user {}", LogSanitizer.sanitize(jwt.getSubject())))
                 .doOnComplete(() -> log.info("Retrieved subscriptions for user {}", LogSanitizer.sanitize(jwt.getSubject())))
