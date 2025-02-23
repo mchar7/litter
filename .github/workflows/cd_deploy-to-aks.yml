@@ -86,7 +86,7 @@ jobs:
           fi
 
       - name: Ensure CI success
-        if: ${{ github.event_name == 'workflow_run' }}
+        if: github.event_name == 'workflow_run'
         run: |
           if [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
             echo "CI was successful."
@@ -110,12 +110,13 @@ jobs:
   prepare-deployment:
     needs: [ check-context ]
     runs-on: ubuntu-latest
-    if: ${{ needs.check-context.outputs.should_deploy == 'true' }}
+    if: needs.check-context.outputs.should_deploy == 'true'
     outputs:
-      image_path: ${{ steps.image-path.outputs.image_path }}
-      image_tag: ${{ steps.determine-image-tag.outputs.image_tag }}
+      deployment_id: ${{ steps.create-deployment.outputs.deployment_id }}
       env_name: ${{ steps.determine-env.outputs.env_name }}
       env_url: ${{ steps.determine-env.outputs.env_url }}
+      image_path: ${{ steps.image-path.outputs.image_path }}
+      image_tag: ${{ steps.determine-image-tag.outputs.image_tag }}
       acme_provider_url: ${{ steps.determine-acme-url.outputs.acme_provider_url }}
       use_tls_from_kv: ${{ steps.determine-tls-cert-source.outputs.use_tls_from_kv }}
       app_helm_overrides_filename: ${{ steps.select-helm-overrides.outputs.app_helm_overrides_filename }}
@@ -136,7 +137,7 @@ jobs:
       #   - If the CI workflow was triggered by a pull request event, deploy to the staging environment
       # - For push event (always to main branch):
       #   - Deploy to production environment
-      - name: Determine Environment
+      - name: Determine environment
         id: determine-env
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
@@ -164,7 +165,7 @@ jobs:
       # - For workflow_run:
       #   - If the determined environment code is "prod", use the production endpoint;
       #     otherwise, use the staging endpoint.
-      - name: Determine ACME Server URL
+      - name: Determine ACME server URL
         id: determine-acme-url
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
@@ -192,7 +193,7 @@ jobs:
         #   - If the triggering event is a pull request, tag with "pr-<pr number>"
         #   - Otherwise, for push events (merged to main) use the short SHA tag
         # - For manual (workflow_dispatch), default to the short SHA tag
-      - name: Determine Image Tag
+      - name: Determine image tag
         id: determine-image-tag
         run: |
           shaShort=${GITHUB_SHA::7}
@@ -217,7 +218,7 @@ jobs:
       #  - "prod" -----------> use "./chart/values.prod.yaml"
       #  - "staging" or PR --> use "./chart/values.staging.yaml"
       #  - "dev" or other ---> use "./chart/values.dev.yaml"
-      - name: Select Helm Overrides File
+      - name: Select Helm overrides file
         id: select-helm-overrides
         run: |
           envName="${{ steps.determine-env.outputs.env_name }}"
@@ -238,7 +239,7 @@ jobs:
       # If event is workflow_dispatch:
       #  - "prod" -----------> true; use values from KV
       #  - other ------------> defer to user input
-      - name: Determine TLS Cert Source
+      - name: Determine TLS cert source
         id: determine-tls-cert-source
         run: |
           if [[ "${{ steps.determine-env.outputs.env_name }}" == "prod" ]]; then
@@ -251,10 +252,19 @@ jobs:
           echo "use_tls_from_kv=$useTLSFromKV" >> $GITHUB_OUTPUT
           echo "Use TLS cert from Key Vault?: $useTLSFromKV"
 
+      - name: Create deployment
+        uses: chrnorm/deployment-action@55729fcebec3d284f60f5bcabbd8376437d696b1
+        id: create-deployment
+        with:
+          token: '${{ github.token }}'
+          environment: ${{ needs.prepare-deployment.outputs.env_name }}
+          environment-url: ${{ needs.prepare-deployment.outputs.env_url }}
+          ref: ${{ github.event.workflow_run.pull_requests[0].head.sha }}
+
   deploy-to-aks:
     needs: [ prepare-deployment, check-context ]
     runs-on: ubuntu-latest
-    if: ${{ needs.check-context.outputs.should_deploy == 'true' || github.event.workflow_run.event == 'workflow_dispatch' }}
+    if: needs.check-context.outputs.should_deploy == 'true' || github.event.workflow_run.event == 'workflow_dispatch'
     env:
       # Azure credentials (cannot use azure/login action with service principal)
       #   See: https://github.com/hashicorp/terraform-provider-azurerm/issues/22034
@@ -331,23 +341,32 @@ jobs:
     permissions:
       contents: read
       statuses: write
-    if: ${{ always() && toJson(github.event.workflow_run.pull_requests[0]) != 'null' }}
+      deployments: write
+    if: always() && github.event.workflow_run.pull_requests[0]  # Only run if triggered by a PR, proceed despite failure
     steps:
       - name: Update PR status
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
         with:
           script: |
             // Determine the status: success if deploy-to-aks succeeded; else failure
-            const conclusion = '${{ needs.deploy-to-aks.result || 'failure' }}' === 'success' ? 'success' : 'failure';
-            // Use the PR head commit SHA for status updates
-            const pr = github.event.workflow_run.pull_requests[0];
-            const commitSha = pr.head.sha;
+            const conclusion = '${{ needs.deploy-to-aks.result }}' == 'success' ? 'success' : 'failure';
+            // Use PR head commit SHA for statuses
+            const commitSha = context.payload.workflow_run.pull_requests[0].head.sha;
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: commitSha,
               state: conclusion,
-              context: 'CD - Deploy to AKS',
+              context: context.workflow,
               description: conclusion === 'success' ? 'Staging deployment successful' : 'Deployment failed',
               target_url: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
             });
+
+      - name: Update deployment status
+        if: always()
+        uses: chrnorm/deployment-status@9a72af4586197112e0491ea843682b5dc280d806
+        with:
+          token: '${{ github.token }}'
+          state: ${{ needs.deploy-to-aks.result }}
+          deployment-id: ${{ needs.prepare-deployment.outputs.deployment_id }}
+          environment-url: ${{ needs.prepare-deployment.outputs.env_url }}
