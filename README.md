@@ -1,6 +1,7 @@
 ![Litter Banner](res/img/litter_banner_2880x754.webp)
+![Site Status](https://img.shields.io/website?url=https%3A%2F%2Fprod.litter.dev/v3/api-docs&down_color=red&down_message=offline&up_color=green&up_message=online&label=%E2%8F%BB%20site%20status&style=for-the-badge)
 ![CI/CD](https://img.shields.io/github/actions/workflow/status/mchar7/litter/ci_build-test-push.yml?branch=main&style=for-the-badge&logo=github&label=CI/CD)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.1-brightgreen?style=for-the-badge&logo=spring-boot)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.1-6DB33F?style=for-the-badge&logo=spring-boot)
 ![Java](https://img.shields.io/badge/Java-Corretto%2021-orange?style=for-the-badge&logo=openjdk)
 ![MongoDB](https://img.shields.io/badge/MongoDB-8.0-green?style=for-the-badge&logo=mongodb)
 ![K8S](https://img.shields.io/badge/K8S-Azure%20AKS-blue?style=for-the-badge&logo=kubernetes)
@@ -62,8 +63,8 @@ Pick your deployment method:
 
 ## :book: API Documentation
 
-TODO: Document the API endpoints at the controller level using `springdoc-openapi` or with AsciiDoc using
-`asciidoctor-spring-autoconfigure`.
+While the site is online (see status badge at the top of this README), you can access the API
+documentation [via the built-in Swagger UI](https://prod.litter.dev/swagger-ui/index.html).
 
 ## :building_construction: Project Structure
 

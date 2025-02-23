@@ -52,8 +52,6 @@ jobs:
             echo "Workflow triggered manually."
 
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            echo "WF_RUN_HEAD: $WF_RUN_HEAD"
-            echo "WF_RUN_PR_BASE: $WF_RUN_PR_BASE"
             echo "Workflow triggered by CI workflow's completion."
 
             if [[ "${{ github.event.workflow_run.event }}" == "push" ]]; then
@@ -111,6 +109,8 @@ jobs:
     needs: [ check-context ]
     runs-on: ubuntu-latest
     if: needs.check-context.outputs.should_deploy == 'true'
+    permissions:
+      deployments: write
     outputs:
       deployment_id: ${{ steps.create-deployment.outputs.deployment_id }}
       env_name: ${{ steps.determine-env.outputs.env_name }}
@@ -362,7 +362,7 @@ jobs:
             });
 
       - name: Update deployment status
-        if: always()
+        if: needs.prepare-deployment.outputs.deployment_id
         uses: chrnorm/deployment-status@9a72af4586197112e0491ea843682b5dc280d806
         with:
           token: '${{ github.token }}'
