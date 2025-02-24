@@ -26,20 +26,28 @@ public class Message {
      */
     @Id
     @JsonSerialize(using = ToStringSerializer.class)
-    @Schema(description = "Unique ID for the message", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(description = "Unique ID for the message",
+            accessMode = Schema.AccessMode.READ_ONLY,
+            type = "string",
+            example = "65c1e8314bd9587f9b6bd94f")
     private ObjectId messageId;
 
     /**
      * Timestamp when the message was created.
      */
-    @Schema(description = "Timestamp when the message was created", accessMode = Schema.AccessMode.READ_ONLY, example = "2025-02-23T15:30:00Z")
+    @Schema(description = "Timestamp when the message was created",
+            accessMode = Schema.AccessMode.READ_ONLY,
+            example = "2025-02-23T15:30:00Z")
     private Instant timestamp;
 
     /**
      * Reference to the producer's unique ID.
      */
     @JsonSerialize(using = ToStringSerializer.class)
-    @Schema(description = "Unique ID for the producer", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(description = "Unique ID for the producer",
+            accessMode = Schema.AccessMode.READ_ONLY,
+            type = "string",
+            example = "65c1e20f4bd9587f9b6bd94d")
     private ObjectId producerId;
 
     /**

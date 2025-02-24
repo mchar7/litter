@@ -45,7 +45,10 @@ public class User {
      */
     @Id // marks this field as the primary key
     @JsonSerialize(using = ToStringSerializer.class)
-    @Schema(description = "Unique ID of the user", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(description = "Unique ID of the user",
+            accessMode = Schema.AccessMode.READ_ONLY,
+            type = "string",
+            example = "65c1e20f4bd9587f9b6bd94d")
     private ObjectId id;
 
     /**
@@ -61,7 +64,7 @@ public class User {
     private List<String> roles;
 
     /**
-     * Hashed password (hidden from API responses).
+     * Hashed password.
      */
     @Schema(hidden = true)
     private String passwordHash;
@@ -73,7 +76,7 @@ public class User {
     private LocalDateTime lockedUntil;
 
     /**
-     * Count of failed login attempts (hidden).
+     * Count of failed login attempts.
      */
     @Schema(hidden = true, description = "Number of failed login attempts")
     private int failedLoginAttempts;

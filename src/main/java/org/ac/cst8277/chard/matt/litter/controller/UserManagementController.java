@@ -45,22 +45,21 @@ public class UserManagementController {
      */
     @Operation(
             summary = "Register a new user",
-            description = "Registers a new user with the provided username and password. " +
-                    "Username must be at least 3 alphanumeric characters. " +
-                    "Password must be at least 8 characters long with at least: " +
-                    "1 uppercase letter, 1 lowercase letter, 1 digit, and 1 special character.",
+            description = "Registers a new user with the provided username and password. Username must be at least 3 alphanumeric characters and password must be strong.",
             responses = {
                     @ApiResponse(responseCode = "201", description = "User created successfully",
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = User.class))),
                     @ApiResponse(responseCode = "400", description = "Invalid input or user already exists")
-            })
+            }
+    )
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<User> register(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     description = "JSON payload containing 'username' and 'password'. Example: {\"username\": \"john_doe\", \"password\": \"P@ssw0rd!\"}",
                     required = true,
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = RegisterRequest.class)))
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = RegisterRequest.class))
+            )
             @RequestBody RegisterRequest registerRequest) {
         String username = registerRequest.getUsername();
         String password = registerRequest.getPassword();
@@ -80,20 +79,21 @@ public class UserManagementController {
      */
     @Operation(
             summary = "User login",
-            description = "Logs in a user and returns a JWT token. The JSON payload must include 'username' and 'password'.",
+            description = "Logs in a user and returns a JWT token. Credentials must be valid.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "User logged in successfully, JWT token returned",
-                            content = @Content(mediaType = "text/plain",
-                                    schema = @Schema(type = "string", example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."))),
+                            content = @Content(mediaType = "text/plain", schema = @Schema(type = "string", example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."))),
                     @ApiResponse(responseCode = "400", description = "Invalid input"),
                     @ApiResponse(responseCode = "401", description = "Unauthorized, invalid credentials")
-            })
+            }
+    )
     @PostMapping("/login")
     public Mono<String> login(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     description = "JSON payload containing 'username' and 'password'. Example: {\"username\": \"john_doe\", \"password\": \"P@ssw0rd!\"}",
                     required = true,
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = LoginRequest.class)))
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = LoginRequest.class))
+            )
             @RequestBody LoginRequest loginRequest) {
         String username = loginRequest.getUsername();
         String password = loginRequest.getPassword();
@@ -110,7 +110,9 @@ public class UserManagementController {
      *
      * @return Flux containing user details
      */
-    @Operation(summary = "Get all users", description = "Retrieves a list of all registered users with basic details (id, username, and roles).",
+    @Operation(
+            summary = "Get all users",
+            description = "Retrieves a list of all registered users with basic details (id, username, and roles).",
             responses = @ApiResponse(
                     responseCode = "200", description = "List of users retrieved successfully",
                     content = @Content(mediaType = "application/json", schema = @Schema(type = "array", implementation = User.class))))
@@ -127,9 +129,9 @@ public class UserManagementController {
      *
      * @return Flux of user objects representing producers
      */
-    @Operation(summary = "Get all producers", description = "Retrieves a list of all users with the producer role.",
-            responses = @ApiResponse(
-                    responseCode = "200", description = "List of producers retrieved successfully",
+    @Operation(
+            summary = "Get all producers", description = "Retrieves a list of all users with the producer role.",
+            responses = @ApiResponse(responseCode = "200", description = "List of producers retrieved successfully",
                     content = @Content(mediaType = "application/json", schema = @Schema(type = "array", implementation = User.class))))
     @GetMapping("/producers")
     public Flux<User> getAllProducers() {

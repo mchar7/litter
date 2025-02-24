@@ -48,16 +48,14 @@ public class SubscriptionController {
      */
     @Operation(
             summary = "Create Subscription",
-            description = "Subscribes the authenticated user to the specified producer. " +
-                    "The path parameter must be a valid producer username. " +
-                    "Requires a valid JWT Bearer token.",
+            description = "Subscribes the authenticated user to the specified producer.",
             responses = {
                     @ApiResponse(responseCode = "201", description = "Subscription created successfully",
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Subscription.class))),
                     @ApiResponse(responseCode = "400", description = "Invalid producer username"),
                     @ApiResponse(responseCode = "409", description = "Already subscribed to this producer")
-            })
-    @SecurityRequirement(name = "bearerAuth")
+            }, security = @SecurityRequirement(name = "bearerAuth")
+    )
     @PutMapping("{producerUsername}")
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<Subscription> createSubscription(
@@ -67,11 +65,9 @@ public class SubscriptionController {
             @PathVariable String producerUsername) {
         return subscriptionService.subscribe(jwt, producerUsername)
                 .doFirst(() -> log.info("User {} attempting to subscribe to producer {}",
-                        LogSanitizer.sanitize(jwt.getSubject()),
-                        LogSanitizer.sanitize(producerUsername)))
+                        LogSanitizer.sanitize(jwt.getSubject()), LogSanitizer.sanitize(producerUsername)))
                 .doOnSuccess(subscription -> log.info("User {} subscribed to producer {}",
-                        LogSanitizer.sanitize(jwt.getSubject()),
-                        LogSanitizer.sanitize(producerUsername)))
+                        LogSanitizer.sanitize(jwt.getSubject()), LogSanitizer.sanitize(producerUsername)))
                 .doOnError(e -> log.error("Failed to create subscription for user {} to producer {}: {}",
                         LogSanitizer.sanitize(jwt.getSubject()),
                         LogSanitizer.sanitize(producerUsername),
@@ -87,14 +83,13 @@ public class SubscriptionController {
      */
     @Operation(
             summary = "Delete Subscription",
-            description = "Deletes the subscription for the authenticated user from the specified producer. " +
-                    "Requires a valid JWT Bearer token.",
+            description = "Deletes the subscription for the authenticated user from the specified producer.",
             responses = {
                     @ApiResponse(responseCode = "204", description = "Subscription deleted successfully"),
                     @ApiResponse(responseCode = "400", description = "Invalid producer username"),
                     @ApiResponse(responseCode = "404", description = "Subscription not found")
-            })
-    @SecurityRequirement(name = "bearerAuth")
+            }, security = @SecurityRequirement(name = "bearerAuth")
+    )
     @DeleteMapping("{producerUsername}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public Mono<Void> deleteSubscription(
@@ -123,13 +118,13 @@ public class SubscriptionController {
      */
     @Operation(
             summary = "Get Subscriptions",
-            description = "Retrieves all subscriptions for the authenticated subscriber. Requires a valid JWT Bearer token.",
+            description = "Retrieves all subscriptions for the authenticated subscriber.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Subscriptions retrieved successfully",
-                            content = @Content(mediaType = "application/json",
-                                    schema = @Schema(type = "array", implementation = Subscription.class))),
-                    @ApiResponse(responseCode = "404", description = "No subscriptions found or user not a subscriber")})
-    @SecurityRequirement(name = "bearerAuth")
+                            content = @Content(mediaType = "application/json", schema = @Schema(type = "array", implementation = Subscription.class))),
+                    @ApiResponse(responseCode = "404", description = "No subscriptions found or user not a subscriber")
+            }, security = @SecurityRequirement(name = "bearerAuth")
+    )
     @GetMapping("")
     public Flux<Subscription> getSubscriptions(
             @Parameter(description = "JWT token representing the authenticated user")
@@ -138,7 +133,6 @@ public class SubscriptionController {
                 .doFirst(() -> log.info("Retrieving subscriptions for user {}", LogSanitizer.sanitize(jwt.getSubject())))
                 .doOnComplete(() -> log.info("Retrieved subscriptions for user {}", LogSanitizer.sanitize(jwt.getSubject())))
                 .doOnError(e -> log.error("Failed to retrieve subscriptions for user {}: {}",
-                        LogSanitizer.sanitize(jwt.getSubject()),
-                        LogSanitizer.sanitize(e.getMessage())));
+                        LogSanitizer.sanitize(jwt.getSubject()), LogSanitizer.sanitize(e.getMessage())));
     }
 }

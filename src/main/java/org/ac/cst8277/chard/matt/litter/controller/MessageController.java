@@ -51,9 +51,7 @@ public class MessageController {
      */
     @Operation(
             summary = "Create a new message",
-            description = "Creates a new message with the given content for the authenticated producer. " +
-                    "The JSON payload must include a 'content' field (e.g., {\"content\": \"Hello, world!\"}). " +
-                    "Requires a valid JWT Bearer token.",
+            description = "Creates a new message for the authenticated producer with a given text content. Assigns current timestamp automatically.",
             responses = {
                     @ApiResponse(responseCode = "201", description = "Message created successfully",
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Message.class))),
@@ -61,7 +59,6 @@ public class MessageController {
                     @ApiResponse(responseCode = "403", description = "User is not authorized to create message")
             }
     )
-    @SecurityRequirement(name = "bearerAuth")
     @PostMapping("")
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<Message> createMessage(
@@ -70,16 +67,13 @@ public class MessageController {
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     description = "A JSON object containing the message content. Example: {\"content\": \"Hello, world!\"}",
                     required = true,
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(type = "object", example = "{\"content\": \"Hello, world!\"}")
-                    )
+                    content = @Content(mediaType = "application/json", schema = @Schema(type = "object", example = "{\"content\": \"Hello, world!\"}"))
             )
             @RequestBody Map<String, String> postData) {
         return messageService.createMessage(jwt, postData.get("content"))
                 .doFirst(() -> log.info("Creating message for user {}", LogSanitizer.sanitize(jwt.getSubject())))
                 .doOnSuccess(message -> log.info("Message {} created by user {}",
-                        message.getMessageId(), LogSanitizer.sanitize(jwt.getSubject())))
+                        LogSanitizer.sanitize(message.getMessageId().toString()), LogSanitizer.sanitize(jwt.getSubject())))
                 .doOnError(e -> log.error("Failed to create message for user {}: {}",
                         LogSanitizer.sanitize(jwt.getSubject()), LogSanitizer.sanitize(e.getMessage())));
     }
@@ -93,15 +87,13 @@ public class MessageController {
      */
     @Operation(
             summary = "Delete a message",
-            description = "Deletes the message identified by its ID if the user is the producer of the message or an admin. " +
-                    "Requires a valid JWT Bearer token.",
+            description = "Deletes the message identified by its ID. Only the message producer or an administrator can perform this action.",
             responses = {
                     @ApiResponse(responseCode = "204", description = "Message deleted successfully"),
                     @ApiResponse(responseCode = "400", description = "Invalid message ID"),
                     @ApiResponse(responseCode = "403", description = "User not authorized to delete the message")
             }
     )
-    @SecurityRequirement(name = "bearerAuth")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public Mono<Void> deleteMessage(
@@ -140,7 +132,7 @@ public class MessageController {
             @PathVariable String id) {
         return messageService.getMessageById(id)
                 .doFirst(() -> log.info("Retrieving message {}", LogSanitizer.sanitize(id)))
-                .doOnSuccess(message -> log.info("Retrieved message {}", message.getMessageId()))
+                .doOnSuccess(message -> log.info("Retrieved message {}", LogSanitizer.sanitize(message.getMessageId().toString())))
                 .doOnError(e -> log.error("Failed to retrieve message {}: {}",
                         LogSanitizer.sanitize(id), LogSanitizer.sanitize(e.getMessage())));
     }
@@ -168,17 +160,13 @@ public class MessageController {
     )
     @GetMapping("/producer/{producerUsername}")
     public Flux<Message> getMessagesForProducer(
-            @Parameter(
-                    description = "Username of the producer",
-                    required = true,
-                    example = "producer1"
-            ) @PathVariable String producerUsername) {
+            @Parameter(description = "Username of the producer", required = true, example = "producer1")
+            @PathVariable String producerUsername) {
         return messageService.getMessagesForProducer(producerUsername)
                 .doFirst(() -> log.info("Retrieving messages for producer {}", LogSanitizer.sanitize(producerUsername)))
                 .doOnComplete(() -> log.info("Retrieved messages for producer {}", LogSanitizer.sanitize(producerUsername)))
                 .doOnError(e -> log.error("Failed to retrieve messages for producer {}: {}",
-                        LogSanitizer.sanitize(producerUsername),
-                        LogSanitizer.sanitize(e.getMessage())));
+                        LogSanitizer.sanitize(producerUsername), LogSanitizer.sanitize(e.getMessage())));
     }
 
     /**
@@ -189,16 +177,15 @@ public class MessageController {
      */
     @Operation(
             summary = "Get messages for subscriber",
-            description = "Retrieves all messages for the authenticated subscriber based on their subscriptions. Requires a valid JWT Bearer token.",
+            description = "Retrieves all messages for the authenticated subscriber based on their subscriptions.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Messages retrieved for subscriber",
                             content = @Content(
                                     mediaType = "application/json",
                                     schema = @Schema(type = "array", implementation = Message.class))),
                     @ApiResponse(responseCode = "204", description = "No messages found")
-            }
+            }, security = @SecurityRequirement(name = "bearerAuth")
     )
-    @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/subscribed")
     public Flux<Message> getAllMessagesForSubscriber(
             @Parameter(description = "JWT token representing the authenticated user")
@@ -207,8 +194,7 @@ public class MessageController {
                 .doFirst(() -> log.info("Retrieving subscribed messages for user {}", LogSanitizer.sanitize(jwt.getSubject())))
                 .doOnComplete(() -> log.info("Retrieved subscribed messages for user {}", LogSanitizer.sanitize(jwt.getSubject())))
                 .doOnError(e -> log.error("Failed to retrieve subscribed messages for user {}: {}",
-                        LogSanitizer.sanitize(jwt.getSubject()),
-                        LogSanitizer.sanitize(e.getMessage())));
+                        LogSanitizer.sanitize(jwt.getSubject()), LogSanitizer.sanitize(e.getMessage())));
     }
 
     /**
@@ -217,8 +203,7 @@ public class MessageController {
      * @return Flux of all messages
      */
     @Operation(summary = "Get all messages", description = "Retrieves all messages in the system.",
-            responses = @ApiResponse(
-                    responseCode = "200", description = "All messages retrieved successfully",
+            responses = @ApiResponse(responseCode = "200", description = "All messages retrieved successfully",
                     content = @Content(mediaType = "application/json", schema = @Schema(type = "array", implementation = Message.class))))
     @GetMapping("/all")
     public Flux<Message> getAllMessages() {
