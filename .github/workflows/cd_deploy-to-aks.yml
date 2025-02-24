@@ -275,6 +275,9 @@ jobs:
     environment:
       name: ${{ needs.prepare-deployment.outputs.env_name }}
       url: ${{ needs.prepare-deployment.outputs.env_url }}
+    concurrency:
+      group: ${{ needs.prepare-deployment.outputs.env_name }}
+      cancel-in-progress: true
     permissions:
       contents: read
     timeout-minutes: 20 # This can take a WHILE, especially on first deployment & with cheap node SKUs
