@@ -232,7 +232,7 @@ jobs:
           echo "app_helm_overrides_filename=$overrideFile" >> $GITHUB_OUTPUT
           echo "Selected override file: $overrideFile"
 
-      # Decide whether or not to use an existing TLS cert & key from the Azure Key Vault:
+      # Decide whether to use an existing TLS cert & key from the Azure Key Vault:
       # If event is workflow_run:
       #  - always ------------> true; use values from KV
       # If event is workflow_dispatch:
@@ -275,6 +275,9 @@ jobs:
     environment:
       name: ${{ needs.prepare-deployment.outputs.env_name }}
       url: ${{ needs.prepare-deployment.outputs.env_url }}
+    concurrency:
+      group: ${{ needs.prepare-deployment.outputs.env_name }}
+      cancel-in-progress: true
     permissions:
       contents: read
     timeout-minutes: 20 # This can take a WHILE, especially on first deployment & with cheap node SKUs
