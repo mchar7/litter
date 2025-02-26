@@ -41,18 +41,6 @@ class UserManagementServiceTest {
     private static final String CREDENTIALS_INVALID_MESSAGE = "Invalid credentials";
     private static final String USERNAME_TAKEN_MESSAGE = "User already exists";
     private static final String USER_NOT_FOUND_MESSAGE = "User not found";
-    private static final String USERNAME_INVALID_MESSAGE = """
-            Invalid username. \
-            Username must be at least 3 characters long \
-            and contain only alphanumeric characters.""";
-    private static final String PASSWORD_INSECURE_MESSAGE = """
-            Invalid password. \
-            Password must be at least 8 characters long \
-            and contain at least: \
-            one uppercase letter, \
-            one lowercase letter, \
-            one number, and \
-            one special character.""";
 
     @Mock
     private UserRepository userRepository;
@@ -187,7 +175,7 @@ class UserManagementServiceTest {
         // key: password we are testing, value: reason for expected failure
         Map<String, String> invalidUsernames = Map.of(
                 "", "Empty username.",
-                "ye", "Too short (min 3 chars).",
+                "ye", "Too short (min 4 chars).",
                 "Its Me Mario", "Spaces not allowed.",
                 "It'sMeMario", "Special characters not allowed."
         );
@@ -201,9 +189,7 @@ class UserManagementServiceTest {
 
             // expect an error for invalid username
             StepVerifier.create(userManagementService.register(username, TEST_PASSWORD_VALID))
-                    .expectErrorMatches(throwable -> throwable instanceof IllegalArgumentException &&
-                            throwable.getMessage().contains(USERNAME_INVALID_MESSAGE))
-                    .verify();
+                    .verifyError(BadCredentialsException.class);
 
             // ensure no user is saved
             Mockito.verify(userRepository, Mockito.never()).save(ArgumentMatchers.any(User.class));
@@ -239,9 +225,7 @@ class UserManagementServiceTest {
 
             // expect an error for insecure password
             StepVerifier.create(userManagementService.register(TEST_USERNAME_VALID, password))
-                    .expectErrorMatches(throwable -> throwable instanceof IllegalArgumentException &&
-                            throwable.getMessage().contains(PASSWORD_INSECURE_MESSAGE))
-                    .verify();
+                    .verifyError(BadCredentialsException.class);
 
             // ensure no user is saved
             Mockito.verify(userRepository, Mockito.never()).save(ArgumentMatchers.any(User.class));
@@ -273,9 +257,7 @@ class UserManagementServiceTest {
 
             // should error due to invalid username
             StepVerifier.create(userManagementService.login(username, TEST_PASSWORD_VALID))
-                    .expectErrorMatches(throwable -> throwable instanceof IllegalArgumentException &&
-                            throwable.getMessage().contains(USERNAME_INVALID_MESSAGE))
-                    .verify();
+                    .verifyError(BadCredentialsException.class);
         });
         Mockito.verifyNoInteractions(userRepository);
         logger.info("All invalid username login tests completed successfully.");
@@ -308,9 +290,7 @@ class UserManagementServiceTest {
 
             // should error due to insecure password
             StepVerifier.create(userManagementService.login(TEST_USERNAME_VALID, password))
-                    .expectErrorMatches(throwable -> throwable instanceof IllegalArgumentException &&
-                            throwable.getMessage().contains(PASSWORD_INSECURE_MESSAGE))
-                    .verify();
+                    .verifyError(BadCredentialsException.class);
         });
         Mockito.verifyNoInteractions(userRepository);
         logger.info("All insecure password login tests completed successfully.");
@@ -533,21 +513,22 @@ class UserManagementServiceTest {
         user2.setUsername("producer2");
         user2.setRoles(List.of(User.DB_USER_ROLE_PRODUCER_NAME, User.DB_USER_ROLE_SUBSCRIBER_NAME));
 
+        @SuppressWarnings("WriteOnlyObject") // will not be retrieved
         User user3 = new User();
         user3.setUsername("subscriber1");
         user3.setRoles(List.of(User.DB_USER_ROLE_SUBSCRIBER_NAME));
 
-        // mock repository returning three users
-        Mockito.when(userRepository.findAll()).thenReturn(Flux.just(user1, user2, user3));
+        // Stub the repository's findByRolesContains method, not findAll:
+        Mockito.when(userRepository.findByRolesContains(targetRole))
+                .thenReturn(Flux.just(user1, user2));
 
-        // expect only users with producer role
+        // Expect only users with the producer role to be returned
         StepVerifier.create(userManagementService.getAllUsersByRole(targetRole))
                 .expectNext(user1)
                 .expectNext(user2)
                 .verifyComplete();
 
-        // verify that the repository was queried once
-        Mockito.verify(userRepository, Mockito.times(1)).findAll();
+        Mockito.verify(userRepository, Mockito.times(1)).findByRolesContains(targetRole);
         logger.info("Test for getAllUsersByRole completed.");
     }
 

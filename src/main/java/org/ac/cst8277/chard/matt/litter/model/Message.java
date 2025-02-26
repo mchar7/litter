@@ -7,7 +7,9 @@ import lombok.Getter;
 import lombok.Setter;
 import org.bson.types.ObjectId;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.ReadOnlyProperty;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.Instant;
 
@@ -18,33 +20,51 @@ import java.time.Instant;
 @Setter
 @Document(collection = "messages")
 @SuppressWarnings("ClassWithoutLogger")
-@Schema(description = "Details of a message published by a producer.")
 public class Message {
+    /**
+     * Regular expression for a valid message.
+     * <p>All characters are allowed, including whitespace.
+     * <p>Length: 1-512 characters.
+     */
+    public static final String TEXT_REGEX = "^.{1,512}$";
+
+    /**
+     * Regular expression for a valid user ID.
+     * <p>BSON ObjectIds, when converted to strings, are a 24-character hexadecimal.
+     */
+    public static final String ID_REGEX = "^[a-f0-9]{24}$";
+
+    /**
+     * Example message content.
+     */
+    public static final String EXAMPLE_TEXT = "Hello, world!";
 
     /**
      * Unique ID for the message.
      */
-    @Id
+    @Id // primary key
+    @ReadOnlyProperty
+    @Schema(type = "string", pattern = ID_REGEX)
     @JsonSerialize(using = ToStringSerializer.class)
-    @Schema(description = "Unique ID for the message", accessMode = Schema.AccessMode.READ_ONLY)
     private ObjectId messageId;
 
     /**
      * Timestamp when the message was created.
      */
-    @Schema(description = "Timestamp when the message was created", accessMode = Schema.AccessMode.READ_ONLY, example = "2025-02-23T15:30:00Z")
+    @ReadOnlyProperty
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
     private Instant timestamp;
 
     /**
      * Reference to the producer's unique ID.
      */
+    @Schema(type = "string", accessMode = Schema.AccessMode.READ_ONLY, pattern = ID_REGEX)
     @JsonSerialize(using = ToStringSerializer.class)
-    @Schema(description = "Unique ID for the producer", accessMode = Schema.AccessMode.READ_ONLY)
     private ObjectId producerId;
 
     /**
-     * The textual content of the message.
+     * The text content of the message.
      */
-    @Schema(description = "Text content of the message", example = "Hello, world!")
+    @Schema(example = EXAMPLE_TEXT, pattern = TEXT_REGEX)
     private String content;
 }

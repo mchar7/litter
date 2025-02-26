@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.oauth2.jwt.JwtClaimAccessor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -47,11 +48,7 @@ class MessageServiceTest {
     private static final String TEST_OTHER_USERNAME = "NameIsJeff";
 
     // error messages (following style from service)
-    private static final String PRODUCER_PRIVILEGES_MESSAGE = "User does not have producer privileges.";
-    private static final String USER_NO_SUBSCRIBER_ROLE = "User is not a subscriber.";
-    private static final String USER_NOT_AUTHORIZED_DELETE = "User is not authorized to delete this message.";
     private static final String MESSAGE_NOT_FOUND_MESSAGE = "Message not found.";
-    private static final String MESSAGE_CANNOT_BE_EMPTY_MESSAGE = "Message content cannot be empty.";
     private static final String TEST_ADMIN_USERNAME = "adminUser";
 
     @Mock
@@ -140,7 +137,6 @@ class MessageServiceTest {
     void testCreateMessageWithoutProducerPrivilege_ThrowsError() {
         logger.info("Testing creating message without producer permission...");
 
-        // mock user with only subscriber role
         User nonProducerUser = new User();
         nonProducerUser.setId(new ObjectId());
         nonProducerUser.setRoles(List.of(User.DB_USER_ROLE_SUBSCRIBER_NAME));
@@ -148,15 +144,11 @@ class MessageServiceTest {
         JwtClaimAccessor nonProducerJwtMock = () -> Map.of("sub", TEST_PRODUCER_USERNAME);
         when(userManagementService.getUserByJwt(nonProducerJwtMock)).thenReturn(Mono.just(nonProducerUser));
 
-        // expect error about missing producer privileges
         StepVerifier.create(messageService.createMessage(nonProducerJwtMock, TEST_MESSAGE_CONTENT))
-                .expectErrorMatches(err ->
-                        err instanceof IllegalArgumentException
-                                && Objects.equals(PRODUCER_PRIVILEGES_MESSAGE, err.getMessage()))
-                .verify();
+                .verifyError(AccessDeniedException.class);
 
-        verify(userManagementService).getUserByJwt(nonProducerJwtMock); // user should have been retrieved
-        verifyNoMoreInteractions(messageRepository); // no save operation should have been called
+        verify(userManagementService).getUserByJwt(nonProducerJwtMock);
+        verifyNoMoreInteractions(messageRepository);
 
         logger.info("Create message test without producer privileges threw correct error.");
     }
@@ -181,17 +173,11 @@ class MessageServiceTest {
 
         // empty content
         StepVerifier.create(messageService.createMessage(jwtMock, ""))
-                .expectErrorMatches(err ->
-                        err instanceof IllegalArgumentException
-                                && Objects.equals(MESSAGE_CANNOT_BE_EMPTY_MESSAGE, err.getMessage()))
-                .verify();
+                .verifyError(IllegalArgumentException.class);
 
         // expect null content
         StepVerifier.create(messageService.createMessage(jwtMock, null))
-                .expectErrorMatches(err ->
-                        err instanceof IllegalArgumentException
-                                && Objects.equals(MESSAGE_CANNOT_BE_EMPTY_MESSAGE, err.getMessage()))
-                .verify();
+                .verifyError(IllegalArgumentException.class);
 
         // no message should have been saved
         verify(messageRepository, never()).save(any(Message.class));
@@ -275,10 +261,7 @@ class MessageServiceTest {
 
         // expect error about unauthorized user
         StepVerifier.create(messageService.deleteMessage(TEST_MESSAGE_ID.toHexString(), jwtMock))
-                .expectErrorMatches(err ->
-                        err instanceof IllegalArgumentException
-                                && Objects.equals(USER_NOT_AUTHORIZED_DELETE, err.getMessage()))
-                .verify();
+                .verifyError(AccessDeniedException.class);
 
         // no delete operation should have been called
         verify(messageRepository, never()).deleteById(anyString());
@@ -357,10 +340,7 @@ class MessageServiceTest {
 
         // expect IllegalArgumentException
         StepVerifier.create(messageService.getMessageById(madeUpId.toHexString()))
-                .expectErrorMatches(err ->
-                        err instanceof IllegalArgumentException
-                                && Objects.equals(MESSAGE_NOT_FOUND_MESSAGE, err.getMessage()))
-                .verify();
+                .verifyError(IllegalArgumentException.class);
 
         verify(messageRepository).findById(madeUpId.toHexString());
         logger.info("getMessageById test with nonexistent ID threw correct error.");
@@ -402,7 +382,7 @@ class MessageServiceTest {
         msg2.setTimestamp(Instant.now());
 
         when(userManagementService.getUserByJwt(jwt)).thenReturn(Mono.just(subscriber));
-        when(subscriptionRepository.findBySubscriberId(TEST_SUBSCRIBER_ID)).thenReturn(Flux.just(subscription));
+        when(subscriptionRepository.getSubscriptionsBySubscriberId(TEST_SUBSCRIBER_ID)).thenReturn(Flux.just(subscription));
         when(messageRepository.findByProducerId(TEST_PRODUCER_ID)).thenReturn(Flux.just(msg1, msg2));
 
         // expect messages to be retrieved
@@ -412,7 +392,7 @@ class MessageServiceTest {
 
         // verify interactions
         verify(userManagementService).getUserByJwt(jwt);
-        verify(subscriptionRepository).findBySubscriberId(TEST_SUBSCRIBER_ID);
+        verify(subscriptionRepository).getSubscriptionsBySubscriberId(TEST_SUBSCRIBER_ID);
         verify(messageRepository).findByProducerId(TEST_PRODUCER_ID);
 
         logger.info("findAllMessagesForSubscriber test with subscriber user passed.");
@@ -438,9 +418,7 @@ class MessageServiceTest {
 
         // expect error about missing subscriber role
         StepVerifier.create(messageService.findAllMessagesForSubscriber(jwt))
-                .expectErrorMatches(throwable -> throwable instanceof IllegalArgumentException &&
-                        USER_NO_SUBSCRIBER_ROLE.contentEquals(throwable.getMessage()))
-                .verify();
+                .verifyError(AccessDeniedException.class);
 
         // verify interactions
         verify(userManagementService).getUserByJwt(jwt);
@@ -572,9 +550,7 @@ class MessageServiceTest {
 
         // expect error about message not found
         StepVerifier.create(messageService.getMessageById(TEST_MESSAGE_ID.toHexString()))
-                .expectErrorMatches(throwable -> throwable instanceof IllegalArgumentException &&
-                        MESSAGE_NOT_FOUND_MESSAGE.contentEquals(throwable.getMessage()))
-                .verify();
+                .verifyError(IllegalArgumentException.class);
 
         // verify interaction
         verify(messageRepository).findById(TEST_MESSAGE_ID.toHexString());

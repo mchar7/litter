@@ -5,11 +5,12 @@ import org.ac.cst8277.chard.matt.litter.model.User;
 import org.ac.cst8277.chard.matt.litter.repository.UserRepository;
 import org.ac.cst8277.chard.matt.litter.security.JwtUtils;
 import org.ac.cst8277.chard.matt.litter.security.LogSanitizer;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtClaimAccessor;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.resource.NoResourceFoundException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -22,23 +23,13 @@ import java.util.regex.Pattern;
 @Slf4j
 @Service
 public class UserManagementService {
-    private static final String USERNAME_INVALID_MESSAGE = """
-            Invalid username. \
-            Username must be at least 3 characters long \
-            and contain only alphanumeric characters.""";
-
     // messages for exceptions
     private static final String INVALID_CREDENTIALS_MESSAGE = "Invalid credentials";
     private static final String USERNAME_TAKEN_MESSAGE = "User already exists";
     private static final String USER_NOT_FOUND_MESSAGE = "User not found";
-    private static final String PASSWORD_INSECURE_MESSAGE = """
-            Invalid password. \
-            Password must be at least 8 characters long \
-            and contain at least: \
-            one uppercase letter, \
-            one lowercase letter, \
-            one number, and \
-            one special character.""";
+    private static final Pattern USERNAME_REGEX_STR = Pattern.compile(User.USERNAME_REGEX_STR);
+    private static final Pattern PASSWORD_REGEX_STR = Pattern.compile(User.PASSWORD_REGEX_STR);
+    private static final String JWT_EMPTY_SUBJECT = "No subject in JWT";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -51,51 +42,32 @@ public class UserManagementService {
      * @param jwtUtils        Utility class for JWT operations
      * @param passwordEncoder Password encoder for hashing passwords
      */
-    @Autowired
-    public UserManagementService(UserRepository userRepository,
-                                 JwtUtils jwtUtils,
-                                 PasswordEncoder passwordEncoder) {
+    public UserManagementService(UserRepository userRepository, JwtUtils jwtUtils, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.jwtUtils = jwtUtils;
         this.passwordEncoder = passwordEncoder;
     }
 
     /**
-     * Ensure that a username meets the requirements.
-     * <p>
-     * Username must be at least 3 characters (only alphanumeric).
+     * Verify that a given username is not blank and matches the regex.
      *
-     * @param testUsername the username to test
-     * @return true if the username meets the requirements, false otherwise
+     * @param username the username to validate
+     * @return true if the username is valid, false otherwise
+     * @see User#USERNAME_REGEX_STR
      */
-    private static boolean isUsernameErroneous(String testUsername) {
-        if (null == testUsername || testUsername.isBlank()) {
-            return true;
-        }
-        Pattern regex = Pattern.compile("^[a-zA-Z0-9]{3,}$");
-        return !regex.matcher(testUsername).matches();
+    static boolean isUsernameErroneous(String username) {
+        return null == username || username.isBlank() || !USERNAME_REGEX_STR.matcher(username).matches();
     }
 
     /**
-     * Ensure that a password meets the requirements.
-     * <p>
-     * Password must be at least 8 characters long and contain at least:
-     * <ul>
-     *     <li>one uppercase letter,</li>
-     *     <li>one lowercase letter,</li>
-     *     <li>one number, and</li>
-     *     <li>one special character.</li>
-     * </ul>
+     * Verify that a given password is not blank and matches the regex.
      *
-     * @param testPassword the password to test
-     * @return true if the password meets the requirements, false otherwise
+     * @param password the password to validate
+     * @return true if the password is valid, false otherwise
+     * @see User#PASSWORD_REGEX_STR
      */
-    private static boolean isPasswordWeak(String testPassword) {
-        if (null == testPassword || testPassword.isBlank()) {
-            return true;
-        }
-        Pattern regex = Pattern.compile("(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,256}");
-        return !regex.matcher(testPassword).matches();
+    private static boolean isPasswordErroneous(CharSequence password) {
+        return null == password || password.isEmpty() || !PASSWORD_REGEX_STR.matcher(password.toString()).matches();
     }
 
     /**
@@ -105,30 +77,24 @@ public class UserManagementService {
      * @param password password of the user (will be hashed)
      * @return Mono of the registered user, or error if the user already exists
      */
-    public Mono<User> register(String username, String password) {
-        if (isUsernameErroneous(username)) {
-            log.warn("Attempt to register with invalid username: {}", LogSanitizer.sanitize(username));
-            return Mono.error(new IllegalArgumentException(USERNAME_INVALID_MESSAGE));
+    public Mono<User> register(String username, CharSequence password) {
+        if (isUsernameErroneous(username) || isPasswordErroneous(password)) {
+            return Mono.error(new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE));
         }
-        if (isPasswordWeak(password)) {
-            log.warn("Attempt to register with insecure password. Username: {}", LogSanitizer.sanitize(username));
-            return Mono.error(new IllegalArgumentException(PASSWORD_INSECURE_MESSAGE));
-        }
-
         return userRepository.findByUsername(username)
-                // run through passwordMeetsRequirements to ensure data is valid
-                .flatMap(existingUser -> {
-                    log.warn("Attempt to register existing username: {}", LogSanitizer.sanitize(username));
-                    return Mono.<User>error(new IllegalArgumentException(USERNAME_TAKEN_MESSAGE));
-                })
+                .doFirst(() -> log.info("Attempting to register user: {}", LogSanitizer.sanitize(username)))
+                // if user already exists:
+                .flatMap(existingUser -> Mono.<User>error(new IllegalArgumentException(USERNAME_TAKEN_MESSAGE)))
                 .switchIfEmpty(Mono.defer(() -> {
+                    log.info("Registering new user: {}", LogSanitizer.sanitize(username));
                     User user = new User();
                     user.setUsername(username);
                     user.setPasswordHash(passwordEncoder.encode(password));
                     user.setRoles(List.of(User.DB_USER_ROLE_SUBSCRIBER_NAME));
-                    log.info("Registering new user: {}", LogSanitizer.sanitize(username));
                     return userRepository.save(user);
-                }));
+                }))
+                .doOnError(e -> log.error(
+                        "Failed to register user '{}'. Error: {}", LogSanitizer.sanitize(username), e.getMessage(), e));
     }
 
     /**
@@ -138,24 +104,19 @@ public class UserManagementService {
      * @param password password of the user
      * @return Mono of the user's token, or Mono error if no match
      */
-    public Mono<String> login(String username, String password) {
-        if (isUsernameErroneous(username)) {
-            log.warn("Attempt to login with invalid username: {}", LogSanitizer.sanitize(username));
-            return Mono.error(new IllegalArgumentException(USERNAME_INVALID_MESSAGE));
-        }
-        if (isPasswordWeak(password)) {
-            log.warn("Attempt to login with insecure password. Username: {}", LogSanitizer.sanitize(username));
-            return Mono.error(new IllegalArgumentException(PASSWORD_INSECURE_MESSAGE));
+    public Mono<String> login(String username, CharSequence password) {
+        if (isUsernameErroneous(username) || isPasswordErroneous(password)) {
+            return Mono.error(new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE));
         }
         return userRepository.findByUsername(username)
+                .doFirst(() -> log.info("Attempting to log in user: {}", LogSanitizer.sanitize(username)))
                 // if user does not exist:
                 .switchIfEmpty(Mono.error(new BadCredentialsException(USER_NOT_FOUND_MESSAGE)))
                 .filter(user -> passwordEncoder.matches(password, user.getPasswordHash()))
                 .map(user -> {
                     log.info("User logged in successfully: {}", LogSanitizer.sanitize(username));
                     return jwtUtils.generateToken(user);
-                })
-                .switchIfEmpty(Mono.error(new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE)));
+                }).switchIfEmpty(Mono.error(new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE)));
     }
 
     /**
@@ -166,7 +127,10 @@ public class UserManagementService {
      */
     Mono<User> getUserByJwt(JwtClaimAccessor jwt) {
         return Mono.just(jwt.getSubject())
-                .flatMap(this::getUserByUsername);
+                .doFirst(() -> log.info("Fetching user by JWT: {}", LogSanitizer.sanitize(jwt.getSubject())))
+                .switchIfEmpty(Mono.error(new JwtException(JWT_EMPTY_SUBJECT)))
+                .flatMap(this::getUserByUsername)
+                .switchIfEmpty(Mono.error(new NoResourceFoundException(USER_NOT_FOUND_MESSAGE)));
     }
 
     /**
@@ -176,7 +140,11 @@ public class UserManagementService {
      * @return Mono of the user
      */
     Mono<User> getUserByUsername(String username) {
+        if (isUsernameErroneous(username)) {
+            return Mono.error(new IllegalArgumentException(INVALID_CREDENTIALS_MESSAGE));
+        }
         return userRepository.findByUsername(username)
+                .doFirst(() -> log.info("Fetching user by username: {}", LogSanitizer.sanitize(username)))
                 .switchIfEmpty(Mono.error(new IllegalArgumentException(USER_NOT_FOUND_MESSAGE)));
     }
 
@@ -187,9 +155,8 @@ public class UserManagementService {
      * @return Flux of User objects with the specified role.
      */
     public Flux<User> getAllUsersByRole(String role) {
-        log.info("Fetching all users with role: {}", role);
-        return userRepository.findAll()
-                .filter(user -> user.getRoles().contains(role));
+        return userRepository.findByRolesContains(role)
+                .doFirst(() -> log.info("Getting all users with role: {}", role));
     }
 
     /**
@@ -198,7 +165,8 @@ public class UserManagementService {
      * @return Flux of all users
      */
     public Flux<User> getAllUsers() {
-        log.info("Fetching all users");
-        return userRepository.findAll();
+        return userRepository.findAll()
+                .doFirst(() -> log.info("Fetching all users"))
+                .doOnComplete(() -> log.info("Finished fetching all users"));
     }
 }

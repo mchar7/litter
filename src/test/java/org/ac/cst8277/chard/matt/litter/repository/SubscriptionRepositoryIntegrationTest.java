@@ -72,7 +72,7 @@ class SubscriptionRepositoryIntegrationTest {
     /**
      * Tests saving a subscription and finding it by subscriberId and producerId.
      * <p>
-     * Tests on: save(Subscription sub), findBySubscriberIdAndProducerId(ObjectId subId, ObjectId prodId)
+     * Tests on: save(Subscription sub), getSubscriptionBySubscriberIdAndProducerId(ObjectId subId, ObjectId prodId)
      * Expected: The subscription is returned correctly.
      */
     @Test
@@ -89,7 +89,7 @@ class SubscriptionRepositoryIntegrationTest {
         // perform the save and find operations
         Mono<Void> saveOperation = subscriptionRepository.save(subscription).then();
         Mono<Subscription> findOperation = saveOperation.then(
-                subscriptionRepository.findBySubscriberIdAndProducerId(subscriberId, producerId)
+                subscriptionRepository.getSubscriptionBySubscriberIdAndProducerId(subscriberId, producerId)
         );
 
         // verify the subscription was saved and found
@@ -110,7 +110,7 @@ class SubscriptionRepositoryIntegrationTest {
      * Expected: Successfully retrieves subscriptions -- only those from the specified subscriber.
      */
     @Test
-    void testFindBySubscriberId() {
+    void testGetAllForSubscriber() {
         logger.info("Testing findBySubscriberId with multiple subscriptions...");
 
         ObjectId subA = new ObjectId();
@@ -134,9 +134,9 @@ class SubscriptionRepositoryIntegrationTest {
                 .thenMany(subscriptionRepository.save(subscription3));
 
         // expect 2 subscriptions for findFluxSubA, check that they match the subscriber ID
-        StepVerifier.create(insertFlux.thenMany(subscriptionRepository.findBySubscriberId(subA)))
-                .assertNext(sub -> assertEquals(subA, sub.getSubscriberId(), "Expected matching subscriber ID"))
-                .assertNext(sub -> assertEquals(subA, sub.getSubscriberId(), "Expected matching subscriber ID"))
+        StepVerifier.create(insertFlux.thenMany(subscriptionRepository.getSubscriptionsBySubscriberId(subA)))
+                .assertNext(sub -> assertEquals(subA, sub.getSubscriberId(), "SubscriberId should match"))
+                .assertNext(sub -> assertEquals(subA, sub.getSubscriberId(), "SubscriberId should match"))
                 .verifyComplete();
 
         logger.info("testFindBySubscriberId verified filtering by subscriberId.");
