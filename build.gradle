@@ -2,6 +2,11 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.4.1'
     id 'io.spring.dependency-management' version '1.1.7'
+
+    // Generate OpenAPI docs as a build step to allow for keeping a static copy of the API docs
+    //   in the project repository. The static copy will be updated during the CI/CD pipeline.
+    //   See: https://github.com/springdoc/springdoc-openapi-gradle-plugin
+    id 'org.springdoc.openapi-gradle-plugin' version '1.9.0'
 }
 
 group = project.group
@@ -23,18 +28,17 @@ dependencies {
 
     // Spring Security
     implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.security:spring-security-crypto'
     implementation 'org.springframework.security:spring-security-oauth2-jose'
-
-    // Docker compose support <-- caused problems
-    // runtimeOnly 'org.springframework.boot:spring-boot-docker-compose'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 
     // Spring Data - reactive MongoDB
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb-reactive'
 
     // SpringDoc OpenAPI doc generator for reactive WebFlux; this will generate and serve Swagger UI
     implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.8.5'
+    implementation 'com.github.therapi:therapi-runtime-javadoc-scribe:0.15.0'
+    annotationProcessor 'com.github.therapi:therapi-runtime-javadoc-scribe:0.15.0' // generate from Javadoc
 
     // Lombok
     compileOnly 'org.projectlombok:lombok'
@@ -48,11 +52,14 @@ dependencies {
 
     // configuration processor
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    implementation 'org.modelmapper:modelmapper:3.0.0'
 }
 
 configurations {
     mockitoAgent
 }
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb-reactive'
 
@@ -72,6 +79,7 @@ dependencies {
         transitive = false
     }
 }
+
 tasks {
     test {
         useJUnitPlatform()

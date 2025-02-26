@@ -5,6 +5,7 @@ import org.ac.cst8277.chard.matt.litter.model.User;
 import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
@@ -32,4 +33,12 @@ public interface UserRepository extends ReactiveMongoRepository<User, String> {
      */
     @NonNull
     <S extends User> Mono<S> save(@NonNull S entity);
+
+    /**
+     * Method to find all Users with a role.
+     *
+     * @param role the role to search for.
+     * @return Flux emitting all Users with the role.
+     */
+    Flux<User> findByRolesContains(String role);
 }

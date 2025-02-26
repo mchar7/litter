@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.bson.types.ObjectId;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.ReadOnlyProperty;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 /**
@@ -18,36 +19,33 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @Setter
 @Document(collection = "subscriptions")
 @SuppressWarnings("ClassWithoutLogger")
-@Schema(description = "Subscription details linking a subscriber with a producer.")
 public class Subscription {
+    /**
+     * Regular expression for a valid subscription ID.
+     * <p>BSON ObjectIds, when converted to strings, are a 24-character hexadecimal.
+     */
+    private static final String ID_REGEX = "^[a-f0-9]{24}$";
+
     /**
      * Unique ID for the subscription.
      */
-    @Id
+    @Id // primary key
+    @ReadOnlyProperty
     @JsonSerialize(using = ToStringSerializer.class)
-    @Schema(description = "Unique ID for the subscription",
-            accessMode = Schema.AccessMode.READ_ONLY,
-            type = "string",
-            example = "65c1e20f4bd9587f9b6bd94d")
+    @Schema(type = "string", accessMode = Schema.AccessMode.READ_ONLY, pattern = ID_REGEX)
     private ObjectId subscriptionId;
 
     /**
      * Unique ID of the subscriber.
      */
     @JsonSerialize(using = ToStringSerializer.class)
-    @Schema(description = "Unique ID of the subscriber",
-            accessMode = Schema.AccessMode.READ_ONLY,
-            type = "string",
-            example = "65c1e20f4bd9587f9b6bd94d")
+    @Schema(type = "string", accessMode = Schema.AccessMode.READ_ONLY, pattern = ID_REGEX)
     private ObjectId subscriberId;
 
     /**
      * Unique ID of the producer.
      */
     @JsonSerialize(using = ToStringSerializer.class)
-    @Schema(description = "Unique ID of the producer to whom the user is subscribed",
-            accessMode = Schema.AccessMode.READ_ONLY,
-            type = "string",
-            example = "65c1e20f4bd9587f9b6bd94d")
+    @Schema(type = "string", accessMode = Schema.AccessMode.READ_ONLY, pattern = ID_REGEX)
     private ObjectId producerId;
 }

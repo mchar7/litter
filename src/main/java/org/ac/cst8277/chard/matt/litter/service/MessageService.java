@@ -1,5 +1,7 @@
 package org.ac.cst8277.chard.matt.litter.service;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.ac.cst8277.chard.matt.litter.model.Message;
 import org.ac.cst8277.chard.matt.litter.model.User;
@@ -7,6 +9,7 @@ import org.ac.cst8277.chard.matt.litter.repository.MessageRepository;
 import org.ac.cst8277.chard.matt.litter.repository.SubscriptionRepository;
 import org.ac.cst8277.chard.matt.litter.security.LogSanitizer;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.oauth2.jwt.JwtClaimAccessor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -14,63 +17,68 @@ import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 
+import static org.ac.cst8277.chard.matt.litter.model.User.DB_USER_ROLE_SUBSCRIBER_NAME;
+
 /**
  * Service class for Message objects.
  */
 @Slf4j
 @Service
 public class MessageService {
-    private final MessageRepository messageRepository;
-    private final SubscriptionRepository subscriptionRepository;
-    private final UserManagementService userManagementService;
+    private static final java.util.regex.Pattern MESSAGE_TEXT_REGEX_COMPILED = java.util.regex.Pattern.compile(Message.TEXT_REGEX);
+    private final MessageRepository msgRepo;
+    private final SubscriptionRepository subsRepo;
+    private final UserManagementService usrMgmtSvc;
 
     /**
      * Constructor for the MessageService.
      *
-     * @param messageRepo      Repository for Message objects
-     * @param subscriptionRepo Repository for Subscription objects
-     * @param usrMgmtSvc       Service for user management operations
+     * @param msgRepo    Repository for Message objects
+     * @param subsRepo   Repository for Subscription objects
+     * @param usrMgmtSvc Service for user management operations
      */
     @Autowired
-    public MessageService(
-            MessageRepository messageRepo,
-            SubscriptionRepository subscriptionRepo,
-            UserManagementService usrMgmtSvc
-    ) {
-        messageRepository = messageRepo;
-        subscriptionRepository = subscriptionRepo;
-        userManagementService = usrMgmtSvc;
+    public MessageService(MessageRepository msgRepo, SubscriptionRepository subsRepo, UserManagementService usrMgmtSvc) {
+        this.msgRepo = msgRepo;
+        this.subsRepo = subsRepo;
+        this.usrMgmtSvc = usrMgmtSvc;
+    }
+
+    /**
+     * Checks if the user is authorized to delete the message.
+     *
+     * @param user    User attempting to delete the message
+     * @param message Message to be deleted
+     * @return True if the user is authorized to delete the message, false otherwise
+     */
+    private static boolean isAuthorizedToDelete(User user, Message message) {
+        return message.getProducerId().equals(user.getId()) || user.getRoles().contains(User.DB_USER_ROLE_ADMIN_NAME);
     }
 
     /**
      * Creates a new message for the given user with the provided content.
      *
-     * @param jwt     JWT of the user creating the message
-     * @param content The content of the message
+     * @param jwt JWT of the user creating the message
+     * @param txt The content of the message
      * @return Mono of the created message
      */
-    public Mono<Message> createMessage(JwtClaimAccessor jwt, String content) {
-        if (null == content || content.isEmpty()) {
-            log.warn("User attempted to create a message with empty content");
-            return Mono.error(new IllegalArgumentException("Message content cannot be empty."));
+    public Mono<Message> createMessage(JwtClaimAccessor jwt, @NotBlank @Pattern(regexp = Message.TEXT_REGEX) String txt) {
+        if (null == txt || !MESSAGE_TEXT_REGEX_COMPILED.matcher(txt).matches()) {
+            return Mono.error(new IllegalArgumentException("Message content is invalid."));
         }
-
-        return userManagementService.getUserByJwt(jwt)
+        return usrMgmtSvc.getUserByJwt(jwt)
+                .doFirst(() -> log.info("Attempting to create message for user: {}", LogSanitizer.sanitize(jwt.getSubject())))
+                .switchIfEmpty(Mono.error(new IllegalArgumentException("User not found.")))
+                .filterWhen(user -> Mono.just(user.getRoles().contains(User.DB_USER_ROLE_PRODUCER_NAME)))
+                .switchIfEmpty(Mono.error(new AccessDeniedException("User is not a producer")))
                 .flatMap(user -> {
-                    if (!user.getRoles().contains(User.DB_USER_ROLE_PRODUCER_NAME)) {
-                        log.warn("User {} attempted to create a message without producer role",
-                                LogSanitizer.sanitize(user.getUsername()));
-                        return Mono.error(new IllegalArgumentException("User does not have producer privileges."));
-                    }
-                    Message message = new Message();
-                    message.setContent(content);
-                    message.setProducerId(user.getId());
-                    message.setTimestamp(Instant.now());
-                    log.info("Creating message for user: {}", LogSanitizer.sanitize(user.getUsername()));
-                    return messageRepository.save(message);
-                })
-                .doOnSuccess(message ->
-                        log.info("Message created successfully with id: {}", message.getMessageId()));
+                            Message message = new Message();
+                            message.setContent(txt);
+                            message.setProducerId(user.getId());
+                            message.setTimestamp(Instant.now());
+                            return msgRepo.save(message);
+                        }
+                ).doOnSuccess(message -> log.info("Message created successfully. ID: {}", message.getMessageId()));
     }
 
     /**
@@ -80,24 +88,19 @@ public class MessageService {
      * @param jwt JWT of the user attempting to delete the message
      * @return Mono indicating the result of the delete operation
      */
-    public Mono<Void> deleteMessage(String id, JwtClaimAccessor jwt) {
-        log.info("Attempting to delete message with id: {}", LogSanitizer.sanitize(id));
-        return userManagementService.getUserByJwt(jwt)
-                .flatMap(user -> messageRepository.findById(id)
+    public Mono<Void> deleteMessage(@Pattern(regexp = Message.ID_REGEX) String id, JwtClaimAccessor jwt) {
+        return usrMgmtSvc.getUserByJwt(jwt)
+                .doFirst(() -> log.info("Attempting to delete message with id: {}", id))
+                .flatMap(user -> msgRepo.findById(id)
                         .switchIfEmpty(Mono.error(new IllegalArgumentException("Message not found.")))
                         .flatMap(message -> {
-                            // check if the user is the producer of the message OR is an admin
-                            if (!message.getProducerId().equals(user.getId()) &&
-                                    !user.getRoles().contains(User.DB_USER_ROLE_ADMIN_NAME)) {
-                                return Mono.error(
-                                        new IllegalArgumentException("User is not authorized to delete this message."));
+                            if (isAuthorizedToDelete(user, message)) {
+                                log.info("User '{}' deleted message ID: {}", LogSanitizer.sanitize(user.getUsername()), id);
+                                return msgRepo.deleteById(id);
+                            } else {
+                                return Mono.error(new AccessDeniedException("Not authorized to delete this message"));
                             }
-
-                            log.info("User {} deleted message with id: {}",
-                                    LogSanitizer.sanitize(user.getUsername()), LogSanitizer.sanitize(id));
-                            return messageRepository.deleteById(id);
-                        })
-                );
+                        }));
     }
 
     /**
@@ -107,11 +110,10 @@ public class MessageService {
      * @return Mono of the message if found
      */
     public Mono<Message> getMessageById(String id) {
-        log.info("Fetching message with id: {}", LogSanitizer.sanitize(id));
-        return messageRepository.findById(id)
-                .doOnSuccess(message ->
-                        log.info("Retrieved message with id: {}", LogSanitizer.sanitize(id)))
-                .switchIfEmpty(Mono.error(new IllegalArgumentException("Message not found.")));
+        return msgRepo.findById(id)
+                .doFirst(() -> log.info("Retrieving message with id: {}", id))
+                .switchIfEmpty(Mono.error(new IllegalArgumentException("Message not found.")))
+                .doOnSuccess(message -> log.info("Retrieved message with id: {}", id));
     }
 
     /**
@@ -121,11 +123,13 @@ public class MessageService {
      * @return Flux of messages produced by the given producer
      */
     public Flux<Message> getMessagesForProducer(String producerUsername) {
-        log.info("Fetching messages for producer: {}", LogSanitizer.sanitize(producerUsername));
-        return userManagementService.getUserByUsername(producerUsername)
-                .flatMapMany(producer -> messageRepository.findByProducerId(producer.getId()))
-                .doOnComplete(() -> log.info("Retrieved messages for producer: {}",
-                        LogSanitizer.sanitize(producerUsername)));
+        if (UserManagementService.isUsernameErroneous(producerUsername)) {
+            return Flux.error(new IllegalArgumentException("Invalid producer username"));
+        }
+        return usrMgmtSvc.getUserByUsername(producerUsername)
+                .doFirst(() -> log.info("Fetching messages for producer: {}", LogSanitizer.sanitize(producerUsername)))
+                .flatMapMany(producer -> msgRepo.findByProducerId(producer.getId()))
+                .doOnComplete(() -> log.info("Retrieved messages for producer: {}", LogSanitizer.sanitize(producerUsername)));
     }
 
     /**
@@ -135,16 +139,12 @@ public class MessageService {
      * @return Flux of Message objects for the subscriber
      */
     public Flux<Message> findAllMessagesForSubscriber(JwtClaimAccessor jwt) {
-        return userManagementService.getUserByJwt(jwt)
-                .flatMapMany(subscriber -> {
-                    if (!subscriber.getRoles().contains(User.DB_USER_ROLE_SUBSCRIBER_NAME)) {
-                        return Flux.error(new IllegalArgumentException("User is not a subscriber."));
-                    }
-                    log.info("Fetching messages for subscriber: {}", LogSanitizer.sanitize(subscriber.getUsername()));
-                    return subscriptionRepository.findBySubscriberId(subscriber.getId())
-                            .flatMap(subscription -> messageRepository.findByProducerId(subscription.getProducerId()));
-                })
-                .doOnComplete(() -> log.info("Retrieved messages for subscriber"));
+        return usrMgmtSvc.getUserByJwt(jwt)
+                .doFirst(() -> log.info("Fetching messages for subscriber: {}", LogSanitizer.sanitize(jwt.getSubject())))
+                .flatMap(user -> user.getRoles().contains(DB_USER_ROLE_SUBSCRIBER_NAME)
+                        ? Mono.just(user) : Mono.error(new AccessDeniedException("User is not a subscriber")))
+                .flatMapMany(subscriber -> subsRepo.getSubscriptionsBySubscriberId(subscriber.getId())
+                        .flatMap(sub -> msgRepo.findByProducerId(sub.getProducerId())));
     }
 
 
@@ -154,8 +154,8 @@ public class MessageService {
      * @return Flux of all messages
      */
     public Flux<Message> getAllMessages() {
-        log.info("Fetching all messages");
-        return messageRepository.findAll()
+        return msgRepo.findAll()
+                .doFirst(() -> log.info("Fetching all messages"))
                 .doOnComplete(() -> log.info("Finished fetching all messages"));
     }
 }

@@ -1,17 +1,13 @@
 package org.ac.cst8277.chard.matt.litter.controller;
 
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeIn;
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
+import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.ac.cst8277.chard.matt.litter.model.Subscription;
 import org.ac.cst8277.chard.matt.litter.security.LogSanitizer;
 import org.ac.cst8277.chard.matt.litter.service.SubscriptionService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -24,8 +20,9 @@ import reactor.core.publisher.Mono;
  */
 @Slf4j
 @RestController
+@Tag(name = "Subscription API")
 @RequestMapping("/subscriptions")
-@Tag(name = "Subscription API", description = "Endpoints for managing subscriptions")
+@SecurityScheme(type = SecuritySchemeType.HTTP, in = SecuritySchemeIn.HEADER, scheme = "bearer", bearerFormat = "JWT")
 public class SubscriptionController {
     private final SubscriptionService subscriptionService;
 
@@ -34,7 +31,6 @@ public class SubscriptionController {
      *
      * @param subscriptionService Service for handling subscription-related operations
      */
-    @Autowired
     public SubscriptionController(SubscriptionService subscriptionService) {
         this.subscriptionService = subscriptionService;
     }
@@ -42,97 +38,66 @@ public class SubscriptionController {
     /**
      * Creates a new subscription to a producer.
      *
-     * @param jwt              JWT representing the authenticated user (provided in the Authorization header)
+     * <p>This endpoint returns a reactive Mono that emits the created subscription and responds with a 201 Created HTTP status.
+     * The authenticated user subscribes to the specified producer. If the subscription already exists or
+     * if the producer doesn't exist, appropriate error responses will be returned.
+     *
+     * @param jwt              JWT representing the authenticated user
      * @param producerUsername Username of the producer to subscribe to
-     * @return Mono of the created subscription
+     * @return A Mono emitting the created subscription with HTTP 201 Created status.
      */
-    @Operation(
-            summary = "Create Subscription",
-            description = "Subscribes the authenticated user to the specified producer.",
-            responses = {
-                    @ApiResponse(responseCode = "201", description = "Subscription created successfully",
-                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Subscription.class))),
-                    @ApiResponse(responseCode = "400", description = "Invalid producer username"),
-                    @ApiResponse(responseCode = "409", description = "Already subscribed to this producer")
-            }, security = @SecurityRequirement(name = "bearerAuth")
-    )
     @PutMapping("{producerUsername}")
     @ResponseStatus(HttpStatus.CREATED)
-    public Mono<Subscription> createSubscription(
-            @Parameter(description = "JWT token representing the authenticated user")
-            @AuthenticationPrincipal Jwt jwt,
-            @Parameter(description = "Username of the producer to subscribe to", required = true, example = "producer1")
-            @PathVariable String producerUsername) {
+    public Mono<Subscription> createSubscription(@AuthenticationPrincipal Jwt jwt, @PathVariable String producerUsername) {
         return subscriptionService.subscribe(jwt, producerUsername)
                 .doFirst(() -> log.info("User {} attempting to subscribe to producer {}",
                         LogSanitizer.sanitize(jwt.getSubject()), LogSanitizer.sanitize(producerUsername)))
                 .doOnSuccess(subscription -> log.info("User {} subscribed to producer {}",
                         LogSanitizer.sanitize(jwt.getSubject()), LogSanitizer.sanitize(producerUsername)))
-                .doOnError(e -> log.error("Failed to create subscription for user {} to producer {}: {}",
-                        LogSanitizer.sanitize(jwt.getSubject()),
-                        LogSanitizer.sanitize(producerUsername),
-                        LogSanitizer.sanitize(e.getMessage())));
+                .doOnError(e -> log.error("Failed to create subscription for user {} to producer {}. Error: {}",
+                        LogSanitizer.sanitize(jwt.getSubject()), LogSanitizer.sanitize(producerUsername), e.getMessage(), e));
     }
 
     /**
      * Deletes a subscription to a producer.
      *
-     * @param jwt              JWT representing the authenticated user (provided in the Authorization header)
+     * <p>This endpoint returns a reactive Mono that signals completion
+     * and responds with a 204 No Content HTTP status upon successful deletion.
+     * The authenticated user unsubscribes from the specified producer. If the subscription doesn't exist
+     * or if the producer doesn't exist, appropriate error responses will be returned.
+     *
+     * @param jwt              JWT representing the authenticated user
      * @param producerUsername Username of the producer to unsubscribe from
-     * @return Mono signaling completion
+     * @return A Mono signaling completion with HTTP 204 No Content status.
      */
-    @Operation(
-            summary = "Delete Subscription",
-            description = "Deletes the subscription for the authenticated user from the specified producer.",
-            responses = {
-                    @ApiResponse(responseCode = "204", description = "Subscription deleted successfully"),
-                    @ApiResponse(responseCode = "400", description = "Invalid producer username"),
-                    @ApiResponse(responseCode = "404", description = "Subscription not found")
-            }, security = @SecurityRequirement(name = "bearerAuth")
-    )
     @DeleteMapping("{producerUsername}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public Mono<Void> deleteSubscription(
-            @Parameter(description = "JWT token representing the authenticated user")
-            @AuthenticationPrincipal Jwt jwt,
-            @Parameter(description = "Username of the producer to unsubscribe from", required = true, example = "producer1")
-            @PathVariable String producerUsername) {
+    public Mono<Void> deleteSubscription(@AuthenticationPrincipal Jwt jwt, @PathVariable String producerUsername) {
         return subscriptionService.unsubscribe(jwt, producerUsername)
                 .doFirst(() -> log.info("User {} attempting to unsubscribe from producer {}",
-                        LogSanitizer.sanitize(jwt.getSubject()),
-                        LogSanitizer.sanitize(producerUsername)))
+                        LogSanitizer.sanitize(jwt.getSubject()), LogSanitizer.sanitize(producerUsername)))
                 .doOnSuccess(v -> log.info("User {} unsubscribed from producer {}",
-                        LogSanitizer.sanitize(jwt.getSubject()),
-                        LogSanitizer.sanitize(producerUsername)))
-                .doOnError(e -> log.error("Failed to delete subscription for user {} from producer {}: {}",
-                        LogSanitizer.sanitize(jwt.getSubject()),
-                        LogSanitizer.sanitize(producerUsername),
-                        LogSanitizer.sanitize(e.getMessage())));
+                        LogSanitizer.sanitize(jwt.getSubject()), LogSanitizer.sanitize(producerUsername)))
+                .doOnError(e -> log.error("Failed to delete subscription for user {} from producer {}. Error: {}",
+                        LogSanitizer.sanitize(jwt.getSubject()), LogSanitizer.sanitize(producerUsername), e.getMessage(), e));
     }
 
     /**
      * Retrieves all subscriptions for the authenticated subscriber.
      *
-     * @param jwt JWT representing the authenticated user (provided in the Authorization header)
-     * @return Flux of subscriptions for the user
+     * <p>This endpoint returns a reactive Flux that emits subscriptions for the authenticated user
+     * and responds with a 200 OK HTTP status. If no subscriptions are found, an empty Flux is returned
+     * which will result in an empty array in the response.
+     *
+     * @param jwt JWT representing the authenticated user
+     * @return A Flux emitting the subscriptions for the user with HTTP 200 OK status.
      */
-    @Operation(
-            summary = "Get Subscriptions",
-            description = "Retrieves all subscriptions for the authenticated subscriber.",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Subscriptions retrieved successfully",
-                            content = @Content(mediaType = "application/json", schema = @Schema(type = "array", implementation = Subscription.class))),
-                    @ApiResponse(responseCode = "404", description = "No subscriptions found or user not a subscriber")
-            }, security = @SecurityRequirement(name = "bearerAuth")
-    )
     @GetMapping("")
-    public Flux<Subscription> getSubscriptions(
-            @Parameter(description = "JWT token representing the authenticated user")
-            @AuthenticationPrincipal Jwt jwt) {
+    public Flux<Subscription> getSubscriptions(@AuthenticationPrincipal Jwt jwt) {
         return subscriptionService.getSubscriptionsForUser(jwt)
                 .doFirst(() -> log.info("Retrieving subscriptions for user {}", LogSanitizer.sanitize(jwt.getSubject())))
                 .doOnComplete(() -> log.info("Retrieved subscriptions for user {}", LogSanitizer.sanitize(jwt.getSubject())))
-                .doOnError(e -> log.error("Failed to retrieve subscriptions for user {}: {}",
-                        LogSanitizer.sanitize(jwt.getSubject()), LogSanitizer.sanitize(e.getMessage())));
+                .doOnError(e -> log.error("Failed to retrieve subscriptions for user {}. Error: {}",
+                        LogSanitizer.sanitize(jwt.getSubject()), e.getMessage(), e));
     }
 }

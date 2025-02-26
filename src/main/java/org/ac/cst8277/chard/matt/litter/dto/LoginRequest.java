@@ -1,29 +1,26 @@
 package org.ac.cst8277.chard.matt.litter.dto;
 
-import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.Setter;
-import lombok.extern.slf4j.Slf4j;
+import org.ac.cst8277.chard.matt.litter.model.User;
 
 /**
  * DTO for login requests.
  */
 @Getter
 @Setter
-@Slf4j
-@Schema(description = "DTO for login requests")
+@SuppressWarnings("ClassWithoutLogger")
 public class LoginRequest {
-    @Schema(
-            description = "User's username - at least 3 alphanumeric characters.",
-            example = "john_doe",
-            pattern = "^[a-zA-Z0-9]{3,}$"
-    )
+    /**
+     * User's username.
+     */
+    @Pattern(regexp = User.USERNAME_REGEX_STR)
     private String username;
 
-    @Schema(
-            description = "User's password.",
-            example = "P@ssw0rd!",
-            pattern = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$"
-    )
+    /**
+     * User's password.
+     */
+    @Pattern(regexp = User.PASSWORD_REGEX_STR)
     private String password;
 }

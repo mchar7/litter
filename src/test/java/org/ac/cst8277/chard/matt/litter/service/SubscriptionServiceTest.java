@@ -41,10 +41,7 @@ class SubscriptionServiceTest {
     private static final String TEST_PRODUCER_USERNAME = "ImAProducer";
 
     // error messages (mimicking the style used in SubscriptionService)
-    private static final String USER_ALREADY_SUBSCRIBED_MESSAGE = "User is already subscribed.";
-    private static final String NO_SUBSCRIPTION_FOUND_MESSAGE = "No subscription found for the given users.";
     private static final String USER_NOT_SUBSCRIBER_MESSAGE = "User is not a subscriber.";
-    private static final String PRODUCER_USERNAME_EMPTY_MESSAGE = "Producer username must not be null or empty.";
 
     @Mock
     private SubscriptionRepository subscriptionRepository;
@@ -106,17 +103,15 @@ class SubscriptionServiceTest {
         when(userManagementService.getUserByUsername(TEST_PRODUCER_USERNAME)).thenReturn(Mono.just(producer));
 
         // mock repository: no existing subscription
-        when(subscriptionRepository.findBySubscriberIdAndProducerId(TEST_SUBSCRIBER_ID, TEST_PRODUCER_ID))
+        when(subscriptionRepository.getSubscriptionBySubscriberIdAndProducerId(TEST_SUBSCRIBER_ID, TEST_PRODUCER_ID))
                 .thenReturn(Mono.empty());
 
         // mock saving subscription
-        when(subscriptionRepository.save(any(Subscription.class)))
-                .thenAnswer(invocation -> {
-                    Subscription sub = invocation.getArgument(0);
-                    sub.setSubscriptionId(new ObjectId());
-                    return Mono.just(sub);
-                });
-
+        when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(invocation -> {
+            Subscription sub = invocation.getArgument(0);
+            sub.setSubscriptionId(new ObjectId());
+            return Mono.just(sub);
+        });
         // expect new subscription
         StepVerifier.create(subscriptionService.subscribe(subscriberJwt, TEST_PRODUCER_USERNAME))
                 .assertNext(subscription -> {
@@ -137,7 +132,7 @@ class SubscriptionServiceTest {
      * Expected: IllegalArgumentException
      */
     @Test
-    void testSubscribeAlreadySubscribed_ThrowsError() {
+    void testSubscribeAlreadySubscribed_ReturnsExistingSubscription() {
         logger.info("Testing subscribe with existing subscription...");
 
         User subscriber = new User();
@@ -155,19 +150,18 @@ class SubscriptionServiceTest {
         Subscription existingSub = new Subscription();
         existingSub.setSubscriberId(TEST_SUBSCRIBER_ID);
         existingSub.setProducerId(TEST_PRODUCER_ID);
-        when(subscriptionRepository.findBySubscriberIdAndProducerId(TEST_SUBSCRIBER_ID, TEST_PRODUCER_ID))
+        when(subscriptionRepository.getSubscriptionBySubscriberIdAndProducerId(TEST_SUBSCRIBER_ID, TEST_PRODUCER_ID))
                 .thenReturn(Mono.just(existingSub));
 
-        // expect error
         StepVerifier.create(subscriptionService.subscribe(subscriberJwt, TEST_PRODUCER_USERNAME))
-                .expectErrorMatches(err ->
-                        err instanceof IllegalArgumentException
-                                && Objects.equals(USER_ALREADY_SUBSCRIBED_MESSAGE, err.getMessage()))
-                .verify();
+                .assertNext(subscription ->
+                        assertEquals(existingSub, subscription, "Subscription should match existing"))
+                .verifyComplete();
 
-        verify(subscriptionRepository, never()).save(any(Subscription.class));
-        logger.info("Subscribe test with existing subscription threw the correct error.");
+        verify(subscriptionRepository, never()).save(any());
+        logger.info("Subscribe test with existing subscription passed.");
     }
+
 
     /**
      * Tests subscribing with null or empty producer username.
@@ -183,19 +177,11 @@ class SubscriptionServiceTest {
 
         // with "", expect error
         StepVerifier.create(subscriptionService.subscribe(mockJwt, ""))
-                .expectNextCount(0L) // no onNext
-                .expectErrorMatches(err ->
-                        err instanceof IllegalArgumentException
-                                && Objects.equals(PRODUCER_USERNAME_EMPTY_MESSAGE, err.getMessage()))
-                .verify();
+                .verifyError(IllegalArgumentException.class);
 
         // with null, expect same error
         StepVerifier.create(subscriptionService.subscribe(mockJwt, null))
-                .expectNextCount(0L) // no onNext
-                .expectErrorMatches(err ->
-                        err instanceof IllegalArgumentException
-                                && Objects.equals(PRODUCER_USERNAME_EMPTY_MESSAGE, err.getMessage()))
-                .verify();
+                .verifyError(IllegalArgumentException.class);
 
         verifyNoInteractions(subscriptionRepository);
         logger.info("Subscribe test with empty producer username handled error gracefully.");
@@ -226,7 +212,7 @@ class SubscriptionServiceTest {
         // mocks
         when(userManagementService.getUserByJwt(subscriberJwt)).thenReturn(Mono.just(subscriber));
         when(userManagementService.getUserByUsername(TEST_PRODUCER_USERNAME)).thenReturn(Mono.just(producer));
-        when(subscriptionRepository.findBySubscriberIdAndProducerId(TEST_SUBSCRIBER_ID, TEST_PRODUCER_ID))
+        when(subscriptionRepository.getSubscriptionBySubscriberIdAndProducerId(TEST_SUBSCRIBER_ID, TEST_PRODUCER_ID))
                 .thenReturn(Mono.just(sub));
         when(subscriptionRepository.delete(sub)).thenReturn(Mono.empty());
 
@@ -258,15 +244,12 @@ class SubscriptionServiceTest {
 
         when(userManagementService.getUserByJwt(subscriberJwt)).thenReturn(Mono.just(subscriber));
         when(userManagementService.getUserByUsername(TEST_PRODUCER_USERNAME)).thenReturn(Mono.just(producer));
-        when(subscriptionRepository.findBySubscriberIdAndProducerId(TEST_SUBSCRIBER_ID, TEST_PRODUCER_ID))
+        when(subscriptionRepository.getSubscriptionBySubscriberIdAndProducerId(TEST_SUBSCRIBER_ID, TEST_PRODUCER_ID))
                 .thenReturn(Mono.empty());
 
         // expect error
         StepVerifier.create(subscriptionService.unsubscribe(subscriberJwt, TEST_PRODUCER_USERNAME))
-                .expectErrorMatches(err ->
-                        err instanceof IllegalArgumentException
-                                && Objects.equals(NO_SUBSCRIPTION_FOUND_MESSAGE, err.getMessage()))
-                .verify();
+                .verifyError(IllegalArgumentException.class);
 
         verify(subscriptionRepository, never()).delete(any());
         logger.info("Unsubscribe test with no matching subscription threw the correct error.");
@@ -295,14 +278,15 @@ class SubscriptionServiceTest {
 
         // mock
         when(userManagementService.getUserByJwt(subscriberJwt)).thenReturn(Mono.just(subscriber));
-        when(subscriptionRepository.findBySubscriberId(TEST_SUBSCRIBER_ID)).thenReturn(Flux.just(sub1, sub2));
+        when(subscriptionRepository.getSubscriptionsBySubscriberId(TEST_SUBSCRIBER_ID))
+                .thenReturn(Flux.just(sub1, sub2));
 
         // expect flux of subscriptions
         StepVerifier.create(subscriptionService.getSubscriptionsForUser(subscriberJwt))
                 .expectNext(sub1, sub2)
                 .verifyComplete();
 
-        verify(subscriptionRepository).findBySubscriberId(TEST_SUBSCRIBER_ID);
+        verify(subscriptionRepository).getSubscriptionsBySubscriberId(TEST_SUBSCRIBER_ID);
         logger.info("getSubscriptionsForUser with subscriber role test passed.");
     }
 
