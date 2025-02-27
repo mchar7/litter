@@ -6,10 +6,13 @@ spring:
       host: ${MONGO_HOST:localhost}
       port: ${MONGO_PORT:27017}
       database: ${MONGO_DB:litter}
-      username: ${MONGO_USER}      # overridden via secrets volume if present
-      password: ${MONGO_PASSWORD}  # overridden via secrets volume if present
+
+      # overridden via secrets volume if present
+      username: ${MONGO_USER:default-value-for-testing-must-be-overridden-if-deployed}
+      password: ${MONGO_PASSWORD:default-value-for-testing-must-be-overridden-if-deployed}
 jwt:
-  secret: ${JWT_SECRET} # overridden via secrets volume if present
+  # overridden via secrets volume if present
+  secret: ${JWT_SECRET:default-value-for-testing-must-be-overridden-if-deployed}
   issuer: litter
   expiration-time: 3600000 # 1 hour in milliseconds
 server:
