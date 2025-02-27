@@ -1,0 +1,826 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Litter API",
+    "description": "Backend API for Litter. For more details, go to the [GitHub repository](https://github.com/mchar7/litter).",
+    "license": {
+      "name": "GPL-3.0",
+      "identifier": "GPL-3.0-or-later"
+    },
+    "version": "v1"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Local server"
+    },
+    {
+      "url": "https://prod.litter.dev",
+      "description": "Production server"
+    }
+  ],
+  "paths": {
+    "/subscriptions/{producerUsername}": {
+      "put": {
+        "tags": [
+          "Subscription API"
+        ],
+        "summary": "Creates a new subscription to a producer",
+        "description": "Creates a new subscription to a producer.\n\n \u003cp\u003eThis endpoint returns a reactive Mono that emits the created subscription and responds with a 201 Created HTTP status.\n The authenticated user subscribes to the specified producer. If the subscription already exists or\n if the producer doesn\u0027t exist, appropriate error responses will be returned.",
+        "operationId": "createSubscription",
+        "parameters": [
+          {
+            "name": "producerUsername",
+            "in": "path",
+            "description": "Username of the producer to subscribe to",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A Mono emitting the created subscription with HTTP 201 Created status.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subscription"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Subscription API"
+        ],
+        "summary": "Deletes a subscription to a producer",
+        "description": "Deletes a subscription to a producer.\n\n \u003cp\u003eThis endpoint returns a reactive Mono that signals completion\n and responds with a 204 No Content HTTP status upon successful deletion.\n The authenticated user unsubscribes from the specified producer. If the subscription doesn\u0027t exist\n or if the producer doesn\u0027t exist, appropriate error responses will be returned.",
+        "operationId": "deleteSubscription",
+        "parameters": [
+          {
+            "name": "producerUsername",
+            "in": "path",
+            "description": "Username of the producer to unsubscribe from",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "A Mono signaling completion with HTTP 204 No Content status."
+          }
+        }
+      }
+    },
+    "/user/register": {
+      "post": {
+        "tags": [
+          "User Management API"
+        ],
+        "summary": "Registers a new user with the provided username and password",
+        "description": "Registers a new user with the provided username and password.\n\n \u003cp\u003eThis endpoint returns a reactive Mono that emits the created user and responds with a 201 Created HTTP status.\n Username must be at least 4 alphanumeric characters and password must be strong. If the username is already taken\n or if the credentials don\u0027t meet the requirements, appropriate error responses will be returned.",
+        "operationId": "register",
+        "requestBody": {
+          "description": "A JSON object containing \"username\" and \"password\"",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A Mono emitting the registered user with HTTP 201 Created status.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/login": {
+      "post": {
+        "tags": [
+          "User Management API"
+        ],
+        "summary": "Logs in a user and returns a JWT token",
+        "description": "Logs in a user and returns a JWT token.\n\n \u003cp\u003eThis endpoint returns a reactive Mono that emits the JWT token upon successful authentication\n and responds with a 200 OK HTTP status. Credentials must be valid. If authentication fails,\n a 401 Unauthorized response will be returned.",
+        "operationId": "login",
+        "requestBody": {
+          "description": "A JSON object containing \"username\" and \"password\"",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A Mono emitting a JWT token with HTTP 200 OK status if login is successful.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages": {
+      "post": {
+        "tags": [
+          "Message API"
+        ],
+        "summary": "Creates a new message with the given content for the authenticated user",
+        "description": "Creates a new message with the given content for the authenticated user.\n\n \u003cp\u003eThis endpoint returns a reactive Mono that emits the created message and responds with a 201 Created HTTP status.",
+        "operationId": "createMessage",
+        "requestBody": {
+          "description": "The request containing the message content.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A Mono emitting the created message with HTTP 201 Created status.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/producers": {
+      "get": {
+        "tags": [
+          "User Management API"
+        ],
+        "summary": "Retrieves a list of all users with the producer role",
+        "description": "Retrieves a list of all users with the producer role.\n\n \u003cp\u003eThis endpoint returns a reactive Flux that emits all users with the producer role\n and responds with a 200 OK HTTP status. If no producers are found, an empty Flux is returned\n which will result in an empty array in the response.",
+        "operationId": "getAllProducers",
+        "responses": {
+          "401": {
+            "description": "Unauthorized status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A Flux emitting all users with the producer role with HTTP 200 OK status.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/user/all": {
+      "get": {
+        "tags": [
+          "User Management API"
+        ],
+        "summary": "Retrieves a list of all registered users with basic details",
+        "description": "Retrieves a list of all registered users with basic details.\n\n \u003cp\u003eThis endpoint returns a reactive Flux that emits all registered users\n and responds with a 200 OK HTTP status. If no users are found, an empty Flux is returned\n which will result in an empty array in the response.\n This endpoint requires admin privileges.",
+        "operationId": "getAllUsers",
+        "responses": {
+          "401": {
+            "description": "Unauthorized status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A Flux emitting all registered users with HTTP 200 OK status.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/subscriptions": {
+      "get": {
+        "tags": [
+          "Subscription API"
+        ],
+        "summary": "Retrieves all subscriptions for the authenticated subscriber",
+        "description": "Retrieves all subscriptions for the authenticated subscriber.\n\n \u003cp\u003eThis endpoint returns a reactive Flux that emits subscriptions for the authenticated user\n and responds with a 200 OK HTTP status. If no subscriptions are found, an empty Flux is returned\n which will result in an empty array in the response.",
+        "operationId": "getSubscriptions",
+        "responses": {
+          "401": {
+            "description": "Unauthorized status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A Flux emitting the subscriptions for the user with HTTP 200 OK status.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Subscription"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{id}": {
+      "get": {
+        "tags": [
+          "Message API"
+        ],
+        "summary": "Retrieves a message by its ID",
+        "description": "Retrieves a message by its ID.\n\n \u003cp\u003eThis endpoint returns a reactive Mono that emits the message with the specified ID\n and responds with a 200 OK HTTP status. If the message is not found, an empty Mono is returned\n which the framework will translate to a 404 Not Found response.",
+        "operationId": "getMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The ID of the message to retrieve.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A Mono emitting the message with the specified ID with HTTP 200 OK status.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Message API"
+        ],
+        "summary": "Deletes a message by its ID",
+        "description": "Deletes a message by its ID.\n\n \u003cp\u003eThis endpoint returns a reactive Mono that signals completion\n and responds with a 204 No Content HTTP status upon successful deletion.",
+        "operationId": "deleteMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The ID of the message to delete.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "An empty Mono signaling completion with HTTP 204 No Content status."
+          }
+        }
+      }
+    },
+    "/messages/subscribed": {
+      "get": {
+        "tags": [
+          "Message API"
+        ],
+        "summary": "Retrieves all messages for the authenticated subscriber based on their subscriptions",
+        "description": "Retrieves all messages for the authenticated subscriber based on their subscriptions.\n\n \u003cp\u003eThis endpoint returns a reactive Flux that emits messages from producers the subscriber\n is following and responds with a 200 OK HTTP status. If no messages are found, an empty Flux\n is returned which will result in an empty array in the response.",
+        "operationId": "getAllMessagesForSubscriber",
+        "responses": {
+          "401": {
+            "description": "Unauthorized status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A Flux emitting the messages for the subscriber with HTTP 200 OK status.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Message"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/producer/{producerUsername}": {
+      "get": {
+        "tags": [
+          "Message API"
+        ],
+        "summary": "Retrieves messages for a specific producer",
+        "description": "Retrieves messages for a specific producer.\n\n \u003cp\u003eThis endpoint returns a reactive Flux that emits messages posted by the specified producer\n and responds with a 200 OK HTTP status. If no messages are found, an empty Flux is returned\n which will result in an empty array in the response.",
+        "operationId": "getMessagesForProducer",
+        "parameters": [
+          {
+            "name": "producerUsername",
+            "in": "path",
+            "description": "The username of the producer whose messages to retrieve.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]{4,32}$"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A Flux emitting the messages for the specified producer with HTTP 200 OK status.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Message"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/all": {
+      "get": {
+        "tags": [
+          "Message API"
+        ],
+        "summary": "Retrieves all messages in the system",
+        "description": "Retrieves all messages in the system.\n\n \u003cp\u003eThis endpoint returns a reactive Flux that emits all messages stored in the system\n and responds with a 200 OK HTTP status. If no messages are found, an empty Flux is returned\n which will result in an empty array in the response.",
+        "operationId": "getAllMessages",
+        "responses": {
+          "401": {
+            "description": "Unauthorized status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request status with error message",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A Flux emitting all available messages with HTTP 200 OK status.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Message"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "contentMediaType": "application/json",
+        "description": "Standard error response to be used for API error responses.",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the error occurred.",
+            "readOnly": true
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message.",
+            "example": "Specific error shown here.",
+            "readOnly": true
+          }
+        }
+      },
+      "Subscription": {
+        "type": "object",
+        "description": "Model class subscriptions.\n Uses Lombok Getter and Setter annotations for auto getter and setter methods.\n Uses Spring\u0027s Document annotation for automagic MongoDB mapping.",
+        "properties": {
+          "subscriptionId": {
+            "type": "string",
+            "description": "Unique ID for the subscription.",
+            "pattern": "^[a-f0-9]{24}$",
+            "readOnly": true
+          },
+          "subscriberId": {
+            "type": "string",
+            "description": "Unique ID of the subscriber.",
+            "pattern": "^[a-f0-9]{24}$",
+            "readOnly": true
+          },
+          "producerId": {
+            "type": "string",
+            "description": "Unique ID of the producer.",
+            "pattern": "^[a-f0-9]{24}$",
+            "readOnly": true
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "description": "DTO for register requests.",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "User\u0027s desired username.",
+            "pattern": "^[a-zA-Z0-9_-]{4,32}$"
+          },
+          "password": {
+            "type": "string",
+            "description": "User\u0027s desired password.",
+            "pattern": "^(?\u003d.*[a-z])(?\u003d.*[A-Z])(?\u003d.*\\d)(?\u003d.*[^a-zA-Z\\d]).{8,}$"
+          }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "description": "DTO for user information in API responses.\n \u003cp\u003eProvides a controlled subset of user information to prevent exposing sensitive data.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique ID of the user.",
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          "username": {
+            "type": "string",
+            "description": "The username of the user.",
+            "example": "john_doe",
+            "pattern": "^[a-zA-Z0-9_-]{4,32}$"
+          },
+          "roles": {
+            "type": "array",
+            "description": "Roles assigned to the user.",
+            "example": [
+              "ROLE_ADMIN",
+              "ROLE_SUBSCRIBER"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "description": "DTO for login requests.",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "User\u0027s username.",
+            "pattern": "^[a-zA-Z0-9_-]{4,32}$"
+          },
+          "password": {
+            "type": "string",
+            "description": "User\u0027s password.",
+            "pattern": "^(?\u003d.*[a-z])(?\u003d.*[A-Z])(?\u003d.*\\d)(?\u003d.*[^a-zA-Z\\d]).{8,}$"
+          }
+        }
+      },
+      "CreateMessageRequest": {
+        "type": "object",
+        "description": "DTO for create message requests.",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The content of the message.",
+            "example": "Hello, world!",
+            "pattern": "^.{1,512}$"
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "description": "Model class for a message.",
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "description": "Unique ID for the message.",
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the message was created."
+          },
+          "producerId": {
+            "type": "string",
+            "description": "Reference to the producer\u0027s unique ID.",
+            "pattern": "^[a-f0-9]{24}$",
+            "readOnly": true
+          },
+          "content": {
+            "type": "string",
+            "description": "The text content of the message.",
+            "example": "Hello, world!",
+            "pattern": "^.{1,512}$"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "in": "header",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

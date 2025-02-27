@@ -26,7 +26,7 @@ jobs:
     steps:
       - name: Validate tags (workflow_dispatch only)
         id: validate-tags
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+        if: github.event_name == 'workflow_dispatch'
         run: |
           if [[ "${{ github.event.inputs.push_to_registry }}" == "true" ]]; then
             if [[ -z "${{ github.event.inputs.image_tags }}" ]]; then
@@ -74,6 +74,9 @@ jobs:
       - name: Execute Gradle build (with tests)
         run: ./gradlew build
 
+      - name: Execute OpenAPI documentation generation
+        run: ./gradlew generateOpenApiDocs
+
       - name: Debug the event
         run: |
           echo "Event name: ${{ github.event_name }}"
@@ -86,12 +89,65 @@ jobs:
 
       # Upload JAR artifact for main branch builds and PR builds targeting main
       - name: Upload JAR artifact
-        if: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main') }}
+        if: github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
         with:
           name: litter-jar
           path: build/libs/litter.jar
           if-no-files-found: error
+
+      # Upload OpenAPI documentation for push events to non-main branches
+      - name: Upload OpenAPI docs artifact
+        if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        with:
+          name: openapi-json
+          path: build/openapi.json
+          if-no-files-found: warn
+
+  update-api-docs:
+    needs: [ build-and-test ] # ensure the build is successful before updating the docs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Only run this job if the push event is not to the main branch
+    #   (main only gets PRs, so the docs will already be updated prior to merge)
+    if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+    env:
+      EXISTING_API_DOC_PATH: 'res/openapi/openapi.json'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: openapi-json
+          path: '/tmp'
+
+      - name: Compare OpenAPI files
+        run: |
+          echo "Comparing OpenAPI files..."
+          if diff -q "$EXISTING_API_DOC_PATH" "/tmp/openapi.json" >/dev/null; then
+            echo "Files are identical; no update needed."
+            echo "need_update=false" >> $GITHUB_ENV
+          else
+            echo "Files differ; updating OpenAPI docs."
+            echo "need_update=true" >> $GITHUB_ENV
+          fi
+
+      - name: Copy OpenAPI docs to documentation directory
+        if: env.need_update == 'true'
+        run: |
+          cp '/tmp/openapi.json' ${{ env.EXISTING_API_DOC_PATH }}
+          echo "OpenAPI docs copied to ${{ env.EXISTING_API_DOC_PATH }}"
+
+      - name: Commit updated OpenAPI docs
+        uses: stefanzweifel/git-auto-commit-action@e348103e9026cc0eee72ae06630dbe30c8bf7a79
+        if: env.need_update == 'true'
+        with:
+          file_pattern: ${{ env.EXISTING_API_DOC_PATH }}
+          commit_message: 'Docs: Update OpenAPI documentation'
 
   push-image:
     needs: [ event-validation, build-and-test ]
@@ -100,7 +156,7 @@ jobs:
     #  - (event: workflow_dispatch) push_to_registry was set to true
     #  - (event: push) the branch is main
     #  - (event: pull_request) the base branch is main
-    if: ${{ github.event.inputs.push_to_registry || (github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')) }}
+    if: github.event.inputs.push_to_registry || (github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main'))
     permissions:
       contents: read
       packages: write
